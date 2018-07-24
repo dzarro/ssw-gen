@@ -1,0 +1,211 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+  <head>
+    <meta content="text/html; charset=windows-1252" http-equiv="content-type">
+    <meta http-equiv="Content-Language" content="en-us">
+    <meta name="GENERATOR" content="Microsoft FrontPage 5.0">
+    <meta name="ProgId" content="FrontPage.Editor.Document">
+    <title>Plotman from the Command Line</title>
+    <link rel="stylesheet" type="text/css" href="gui_help.css">
+  </head>
+  <body style="   list-style-type: decimal;">
+    <div style="background-color: #BED3D3"> <br>
+      <h1 style="text-align: center"><font color="#000000">Plot Manager
+          (PLOTMAN) from the Command Line</font></h1>
+    </div>
+    <p><a target="_top" title="PLOTMAN Guide" href="plotman_help.htm">Full
+        PLOTMAN Guide</a><br>
+    </p>
+    <p>Some of the data objects you work with have built-in plotman
+      methods.&nbsp; These include the RHESSI image, spectrum, lightcurve, and
+      observing summary objects, as well as instrument data objects available
+      through show_synop and vso_search such as sdo, aia, eit, euvi,&nbsp;
+      trace, and many more.&nbsp; If you're not using an object with a built-in
+      plotman method, you can insert your data into one of the generic objects
+      that do have a plotman method: xyplot, utplot, map, and specplot
+      objects.&nbsp; </p>
+    <p><br>
+    </p>
+    <h2>Using an object with a built-in plotman method</h2>
+    <p style="margin-left: 40px;">You can check whether your object has a
+      plotman method by typing (assuming o is your object) </p>
+    <blockquote>
+      <p style="margin-left: 40px;">print,have_method(o, 'plotman')</p>
+    </blockquote>
+    <div style="margin-left: 40px;"> </div>
+    <p style="margin-left: 40px;">&nbsp;A result of 1 means you do have a
+      plotman method. If so, you can call PLOTMAN from the command line by
+      typing</p>
+    <div style="margin-left: 40px;"> </div>
+    <blockquote>
+      <p style="text-align: start; margin-left: 40px;">o -&gt;plotman<br>
+        o-&gt;plotman, desc='Name for plot'&nbsp;&nbsp; ; assigns name to plot
+        panel in PLOTMAN <br>
+        o-&gt;plotman, plotman_obj=pobj&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ;
+        returns PLOTMAN object reference, or if pobj exists, adds new plot to
+        that PLOTMAN instance</p>
+      <p style="text-align: start; margin-left: 40px;"><br>
+      </p>
+    </blockquote>
+    <div style="margin-left: 40px;"> </div>
+    <h2>Inserting your data into a generic object for use with PLOTMAN</h2>
+    <p style="margin-left: 40px;">If you have a simple data array (image,
+      spectrum, time profile, etc.) rather than an object with a plotman method,
+      the best way to use PLOTMAN is to insert the data into one of these
+      generic plot objects: xyplot , utplot, specplot, or map, and then use that
+      object as input to PLOTMAN.&nbsp; These object classes are in the gen part
+      of $SSW - please see the header documentation in the .pro files for more
+      information about how to call them.&nbsp; These object classes are
+      integrated well with PLOTMAN&nbsp; - you can set a variety of parameters
+      describing your data into the generic plot object, and PLOTMAN will
+      recognize them.&nbsp; (You can also put the data arrays directly into
+      PLOTMAN without using the intermediate object, but there is less
+      flexibility, so that is not discussed here.)<br>
+    </p>
+    <div style="margin-left: 40px;"> </div>
+    <p style="margin-left: 40px;">These are the data types and corresponding
+      plot objects that have plotman methods:</p>
+    <div style="margin-left: 40px;"> </div>
+    <table style="margin-left: 40px; width: 90%;" border="1">
+      <tbody>
+        <tr>
+          <td style="text-align: left;"><b>DATA<br>
+            </b></td>
+          <td style="text-align: left;"><b>OBJECT CLASS<br>
+            </b></td>
+          <td style="text-align: left;"><b>OBJECT CREATION<br>
+            </b></td>
+        </tr>
+        <tr>
+          <td style="text-align: left;">x, y arrays <br>
+            x can be dimensioned [nx], [2,nx], [nx,ny], [2,nx,ny]&nbsp;&nbsp;
+            where 2 is for low/high edges<br>
+            y can be dimensioned [nx] or [nx,ny]<br>
+            nx and ny for x and y arrays must match<br>
+            error (optional) should be dimensioned the same as y</td>
+          <td style="text-align: left;">xyplot</td>
+          <td style="text-align: left;">o = obj_new('xyplot', x, y)<br>
+            or<br>
+            o = obj_new('xyplot', x, y, error)</td>
+        </tr>
+        <tr>
+          <td style="width: 713.367px; text-align: left;">time, y arrays<br>
+            same options as for x,y arrays<br>
+            time array can be any anytim format<br>
+            if time is simple array, it is interpreted as seconds since
+            1979/1/1, unless you provide a utbase<br>
+          </td>
+          <td style="width: 148.317px; text-align: left;">utplot</td>
+          <td style="width: 481.317px; text-align: left;">o = obj_new('utplot',
+            x, y)<br>
+            or<br>
+            o = obj_new('utplot', x, y, error)<br>
+            or<br>
+            o = obj_new('utplot, x, y, utbase=utbase)</td>
+        </tr>
+        <tr>
+          <td style="text-align: left;">image array<br>
+            first make a map structure from image data</td>
+          <td style="text-align: left;">map</td>
+          <td style="text-align: left;">o = obj_new('map')<br>
+            o-&gt;set, map=map_struct</td>
+        </tr>
+        <tr>
+          <td style="text-align: left;">time, y spectrogram<br>
+            time dimensioned [nx]<br>
+            y dimensioned [nx, ny]<br>
+            dim1_vals dimensioned [ny] (y axis values)<br>
+            if time is simple array, it is interpreted as seconds since
+            1979/1/1, unless you provide a utbase</td>
+          <td style="text-align: left;">specplot</td>
+          <td style="text-align: left;">o = obj_new('specplot', x, y,
+            dim1_vals=dim1_vals)<br>
+            or<br>
+            o = obj_new('specplot', x, y, dim1_vals=dim1_val, utbase=utbase)</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="margin-left: 40px;"> </div>
+    <p style="margin-left: 40px;"><br>
+    </p>
+    <p style="margin-left: 40px;">Example: Running the following code will put
+      an xyplot, utplot, image, and spectrogram into the same PLOTMAN instance.</p>
+    <div style="margin-left: 40px;"> </div>
+    <blockquote>
+      <p style="margin-left: 40px;"> x = findgen(100) &amp; y = findgen(100)<br>
+        xy = obj_new('xyplot',x,y)<br>
+        xy-&gt;plotman, plotman_obj=pobj, desc='XYPLOT example'</p>
+      <p style="margin-left: 40px;">t = dindgen(100) &amp; y =
+        [[sin(x)],[cos(x)/alog(x)]] ; now y has two 'channels'<br>
+        ut = obj_new('utplot', t, y, utbase='3-jan-2017 12:00')<br>
+        ut-&gt;set, id='Sin and cos plot for test', data_unit='y axis
+        label',&nbsp;dim1_ids=['sin', 'cos/log']&nbsp; ;adds labeling
+        information<br>
+        ut-&gt;plotman, plotman_obj=pobj, desc='UTPLOT example', psym=0,
+        yrange=[-2,2]</p>
+      <p style="margin-left: 40px;"> image = dist(512)<br>
+        map_struct = make_map(image, xc=100, yc=200, dx=2, dy=2)<br>
+        omap = obj_new('map')<br>
+        omap-&gt;setmap, map=map_struct<br>
+        omap-&gt;plotman, plotman_obj=pobj, description='MAP example'</p>
+      <p style="margin-left: 40px;">spec = dist(512)<br>
+        t=dindgen(512)*10.<br>
+        dim1_vals=findgen(512)*2.<br>
+        sobj=obj_new('specplot', t,spec,dim1_vals=dim1_vals, utbase='3-jan-2017
+        12:00')<br>
+        sobj-&gt;set, data_unit='keV', title='Spectrogram example'<br>
+        sobj-&gt;plotman, plotman_obj=pobj, desc='SPECPLOT example'</p>
+    </blockquote>
+    <div style="margin-left: 40px;"> </div>
+    <p style="margin-left: 40px;">The commands above should put four panels into
+      one PLOTMAN instance. If you click Window_Control / Show All Panels you
+      should see a display that looks like this:</p>
+    <div style="margin-left: 40px;"> </div>
+    <p style="margin-left: 40px;"><img title="PLOTMAN example" alt="PLOTMAN example"
+        src="plotman_example_2x2.jpg"> <br>
+    </p>
+    <p style="margin-left: 40px;">(Your image colors may be different from the
+      example above because your plotman defaults may be different, see below).
+    </p>
+    <p style="margin-left: 40px;">More information about making map structures
+      is <a target="_blank" title="IDL Map Software" href="https://hesperia.gsfc.nasa.gov/rhessidatacenter/complementary_data/maps/maps.html">here</a>,
+      and information about using map objects is <a target="_blank" title="Programming IDL Objects"
+        href="https://hesperia.gsfc.nasa.gov/rhessidatacenter/complementary_data/objects/objects.html">here</a>.</p>
+    <p style="margin-left: 40px;"><br>
+    </p>
+    <h2>In Either Case...</h2>
+    <p>On the call to PLOTMAN , you can include many of the keywords that apply
+      to the IDL plot command. </p>
+    <p>Once your plots are in PLOTMAN, you can use Plot_Control to change
+      options and Window_Control to select panels. </p>
+    <p>To select default options such as color, use the File / Set Plot
+      Preferences... button. Use Window_Control / Multi_panel Options for
+      options that operate on multiple existing panels (such as changing display
+      settings on existing panels, e.g. change all selected plots to linear
+      scaling).</p>
+    <p>Each time you call o-&gt;plotman, a new plotman instance is created
+      unless you use the plotman_obj keyword to pass in an existing plotman
+      reference. If multiple plots are sent to the same plotman instance, each
+      new plot is saved as a separate panel (except see below).</p>
+    <p>If you add a new panel with the same description (panel name) as a panel
+      already in that plotman session, the default is to not add the panel, but
+      to show the existing panel (the assumption is that if the description is
+      the same, the panel is the same, and we want to limit unnecessary panels).
+      To force PLOTMAN to make a new panel, you can do one of the following:</p>
+    <ol>
+      <li>Supply a new value in the desc keyword </li>
+      <li>Set the keyword nodup=0 (keep the old panel and add a new panel with
+        the same name, so the only way to distinguish between new and old is the
+        current time which is appended to the panel name)</li>
+      <li>Set the keywords nodup=0, /replace (replace the existing panel)</li>
+    </ol>
+    <br>
+    For more details about using internal plotman methods, please see the <a target="_top"
+      title="PLOTMAN Methods" href="plotman_methods.html">Plotman Methods and
+      Parameters</a> document.<br>
+    <br>
+    <br>
+    <hr> <i><font color="#FF0000"> Last updated 27-Jan-2017 by <a href="mailto:kim.tolbert@gsfc.nasa.gov">
+          Kim Tolbert</a>, 301-286-3965</font></i>
+  </body>
+</html>

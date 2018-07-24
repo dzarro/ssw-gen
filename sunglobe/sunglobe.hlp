@@ -1,0 +1,388 @@
+!Overview
+The SunGlobe program allows the user to bring in images of
+the solar disk from various sources and display them on
+globe which can be controlled interactively by the user.
+
+!Graphics window
+The solar globe and other graphical components are displayed
+in the central window.  Cursor actions within this window
+depend on which of the "Ephemeris", "Orientation", or "Image
+center" options along the left is selected.
+
+!Loaded images area
+The right side of the widget is reserved for icons
+representing the various images which have been read in.
+This region starts out blank, and gets populated as images
+are added.  A slider allows one to see more icons than can
+fit on the screen at one time.  Each icon will include a
+label, and button controlling which image is selected at any
+time.
+
+!File menu
+
+!!Read in Helioviewer image
+Select an observation from the Helioviewer database closest
+in time to the target date.
+
+!!!Observatory
+Select the observatory (e.g. SDO).
+
+!!!Instrument
+Select the instrument, based on the selected observatory
+(e.g. SDO/AIA).
+
+!!!Measurement
+Select the measurement, based on the selected observatory
+and instrument (e.g. SDO/AIA/171).
+
+!!!Target date
+The target date to search for.  The closest image to this
+target date will be returned.
+
+!!!Date/Time (Helioviewer)
+The Date and Time buttons allow the user to change the
+target date and time.  This only affects the search of the
+Helioviewer database--the target date for differential
+rotation and spacecraft pointing will be unaffected.
+
+!!!SourceID
+This displays the Helioviewer source ID, derived from the
+observatory, instrument, and measurement.
+
+!!!Closest date
+This displays the closest date found in the Helioviewer
+database to the target date.
+
+!!!#days
+This displays the difference in days between the image date
+and the target date.
+
+!!!Cancel
+Cancels the selection.
+
+!!!Select
+Returns the selection to the SunGlobe program so that the
+image can be read in.
+
+!!Read in PFSS magnetic field
+Reads in a potential field source surface model calculation
+based on the target date, and generates magnetic field
+lines.  Closed magnetic field lines are plotted in white,
+and open magnetic field lines are plotted in blue (negative)
+or green (positive).
+
+Please note that a crude correction for differential
+rotation is applied to make sure that the field line end
+points line up with the solar images, but that this
+correction is otherwise not physically valid.
+
+!!!Field type
+Allows the selection between two strategies for distributing
+the field lines on the solar surface: uniform spacing or
+weighted by field strength.  The latter tends to emphasize
+active regions.
+
+!!!Field line spacing
+Approximate spacing in degrees for the uniform spacing
+option.  Must be between 1 and 15.
+
+!!!Target number of lines
+The approximate number of magnetic field lines to generate
+for the field-strength weighted option.  Must be between 100
+and 3000.
+
+!!!Polar exclusion zone
+Number of degrees to exclude around the poles.  Used to
+prevent the polar coronal holes from dominating the result
+when the "Weighted by field strength" option is chosen.
+Must be between 0 and 30.
+
+!!!Cancel (PFSS)
+Cancel reading in the PFSS model.
+
+!!!Apply (PFSS)
+Read in the PFSS model, using the specified parameters.
+
+!!Estimate magnetic connection point
+Uses a simple Parker spiral combined with a potential field
+source surface model to estimate the point on the solar
+surface to which the spacecraft is magnetically connected.
+One or more connection regions are displayed as red ovals
+representing two-sigma error estimates.  Each oval contains
+a confidence level which helps to distinguish the relative
+importance when more than one oval is displayed.
+
+!!!Basis for observation point
+The spacecraft location can be determined either from the
+ephemeris (default), or using the view location in the
+orientation box.
+
+Note that if the "Current orientation" option is selected,
+and the connection has to be later recalculated due to a
+change in target date or time, the calculation will use
+whatever the current orientation is at the time.
+
+!!!Target number of lines (Connection)
+The (approximate) number of magnetic fields lines generated
+to extrapolate from the source surface at 2.5 solar radii
+down to the photosphere.  The locations of these field lines
+on the source surface are randomnly distributed around the
+Parker spiral solution to provide an error estimate.
+
+!!!Gaussian width at source surface (degrees)
+Gaussian width in degrees used to generate the random
+magnetic field line locations at the source surface.
+
+!!!Wind speed (km/s)
+Solar wind speed in km/s used to calculate the Parker
+spiral.
+
+!!!Cancel (Connection)
+Cancel estimating the magnetic field connection point.
+
+!!!Apply (Connection)
+Estimate the magnetic connection point, using the specified
+parameters.
+
+!!Save images
+Save the currently read-in images into a file.  The images
+will be saved into a file with the extension ".geny",
+default is "sunglobe.geny".
+
+!!Restore images
+Restore previously saved set of images.
+
+!!Write JPEG
+Writes out the current graphics window as a JPEG file.
+
+!!Quit
+Quit the application.
+
+!Actions menu
+
+!!Reset roll angle
+Reset the roll angle to zero.
+
+!!Reset orientation
+Reset the globe orientation to its original value, i.e. zero
+degrees Carrington longitude and latitude, and zero degrees
+roll.
+
+!!Reset center
+Reset the image center to zero arc seconds in both X and Y.
+
+!!Reset zoom
+Reset the zoom parameter to its original value showing the
+entire Sun.
+
+!!Reset pointing
+Reset the spacecraft pointing to Sun center, i.e. zero arc
+seconds in both X and Y.
+
+!!Reset all
+Reset all orientation, centering, zoom, and spacecraft
+pointing parameters to their original values.
+
+!Configure menu
+
+!!Configure SPICE field-of-view
+Brings up a widget to allow the user to configure the
+parameters describing the SPICE field-of-view.
+
+!!Configure EUI field-of-view
+Brings up a widget to allow the user to configure the
+parameters describing the EUI field-of-view.
+
+!!Configure PHI field-of-view
+Brings up a widget to allow the user to configure the
+parameters describing the PHI field-of-view.
+
+!!Configure field-of-view
+When a spacecraft other than Solar Orbiter is selected, the
+user is presented with a generic field-of-view menu.
+
+!!Configure orbit trace
+Brings up a widget to allow the user to control the
+parameters defining the orbital trace.  The parameters
+consist of the number of time steps before and after the
+target time, the time difference between steps, and the
+units.  Steps in the past are shown as crosses (X), and
+points in the future are shown as diamonds.  Both symbols on
+top of each other mark the target time.
+
+!Options menu
+
+!!Coordinate grid on/off
+Selecting this option controls whether or not the Carrington
+longitude/latitude coordinate grid is visible.
+
+!!PFSS magnetic field on/off
+Selecting this option controls whether or not the potential
+field source surface (PFSS) model magnetic field lines are
+on or off.  If the PFSS model has not yet been read in, then
+it will be read in here.  See "Read in PFSS magnetic field"
+under "File" for more information.
+
+!!Spacecraft boresight on/off
+Selecting this option controls whether or not a plotting
+symbol representing the direction of the spacecraft
+boresight is visible.
+
+!!SPICE field-of-view on/off
+Selecting this option controls whether or not a line drawing
+representing the SPICE field-of-view (FOV) is visible.  The
+format of the FOV can be modified with the configure option
+under the Action menu.  Note that the apparent size of the
+SPICE field-of-view will depend strongly on the viewing
+distance defined in the Orientation section.
+
+!!EUI field-of-view on/off
+Selecting this option controls whether or not a line drawing
+representing the EUI field-of-view (FOV) is visible.  The
+format of the FOV can be modified with the configure option
+under the Action menu.  Note that the apparent size of the
+EUI field-of-view will depend strongly on the viewing
+distance defined in the Orientation section.
+
+!!PHI field-of-view on/off
+Selecting this option controls whether or not a line drawing
+representing the PHI field-of-view (FOV) is visible.  The
+format of the FOV can be modified with the configure option
+under the Action menu.  Note that the apparent size of the
+PHI field-of-view will depend strongly on the viewing
+distance defined in the Orientation section.
+
+!!Field-of-view on/off
+When a spacecraft other than Solar Orbiter is selected, a
+generic field-of-view can be turned on or off.  The format
+of the FOV can be modified with the configure option under
+the Action menu.  Note that the apparent size of the
+field-of-view will depend strongly on the viewing distance
+defined in the Orientation section.
+
+!!Orbit trace on/off
+Controls whether or not symbols representing the progress of
+the subspacecraft point across the solar surface are shown.
+Steps in the past are shown as crosses (X), and points in
+the future are shown as diamonds.  Both symbols on top of
+each other mark the target time.  The number of points and
+the time between points can be controlled through the
+Configure pull-down menu.  By default the points are
+separated by one day.
+
+!Ephemeris (cursor option)
+Selecting this option allows the user to control the
+spacecraft pointing parameters with the cursor.  The globe
+orientation and perspective will also be set to what the
+spacecraft will see for the target date and time.
+
+!!Date/Time (Ephemeris)
+The Date and Time buttons in the Ephemeris section allow the
+user to change the target date and time.  All images will be
+differentially rotated to this time, and the globe
+orientation will be updated accordingly.
+
+!!Convert
+This button brings up a subwidget showing the pointing
+converted from spacecraft X and Y, which depend on the
+spacecraft roll, into Helioprojective Cartesian (HPC) X and
+Y, which are independent of roll.  This option is only
+available when the ephemeris cursor option is selected.
+
+!!!Stay within limb
+Selecting this option will adjust the pointing values to
+stay within the limb.
+
+!!!Quit (Convert)
+Exits the Convert subwidget
+
+!!!Export
+Exports the current pointing information into a JSON file,
+and exits the Convert Subwidget
+
+!!!Send pointing values
+Send pointing values back to the calling program.  This
+option is only available when a valid return widget ID has
+been supplied to the program.  If the orientation lock is in
+effect, a warning message will appear, and the user will be
+asked whether or not to continue.  Selecting this option
+will also exit the Convert subwidget.
+
+!!!Target date (Convert)
+Copy of the target date from the main widget, not editable.
+
+!!!Spacecraft X, Y coordinates
+Editing these values will also modify the spacecraft
+pointing in the main SunGlobe widget.  The edits can be
+applied either by entering the return key in one of the
+value fields, or by clicking on the "Apply" button.  The
+spacecraft roll is also shown, but is not editable.
+
+!!!Apply (Convert)
+Applies any edits to the pointing values in this block.
+Each block has its own Apply button
+
+!!!Derolled HPC coordinates
+Pointing values with spacecraft roll taken out.
+
+!!!Carrington coordinates
+Carrington longitude and latitude.  If the point is off the
+limb, then this section will not be visible.
+
+!!Spacecraft pointing
+The X and Y spacecraft pointing widgets show the currently
+selected spacecraft pointing in arc seconds.  These can also
+be edited to change the pointing.
+
+!Orientation (cursor option)
+Selecting this option allows the user to control the globe
+orientation interactively with the cursor.
+
+!!Longitude, Latitude, Roll
+The orientation of the globe is shown in terms of Carrington
+longitude and latitude, and image roll, in degrees.  These
+can also be edited to change the orientation.
+
+!!Distance
+The distance widget allows the user to control the distance
+in astronomical units (AU) from which the globe is viewed.
+Changing the distance changes the image perspective.
+
+!!Lock orientation
+Selecting the lock orientation option prevents the Ephemeris
+option from changing the orientation and perspective based
+on the target date.
+
+!Image center (cursor option)
+Selecting this option allows the user to use the cursor to
+interactively move the solar globe within the graphics
+window.  This option is particularly useful when combined
+with the zoom in/out buttons.
+
+!!Image center X,Y
+These widgets display the position of the currently selected
+image center in arc seconds.  They can also be edited to
+change the centering.
+
+!Zoom in/out
+These buttons allow the user to zoom in or out.
+
+!Selected image
+This submenu shows the label and observation date of the
+selected image, and allows one to control how the image is
+displayed on the globe.  The image icons along the right
+side control which image is selected.
+
+!!Move up/down
+These buttons allow the user to move the individual images
+up or down in the image heirarchy.  For opacity purposes,
+higher images are displayed over lower ones.
+
+!!Opacity
+This slider widget allows one to control the opacity of the
+selected image, from 0 (completely transparent) to 1
+(completely opaque).  The numerical field can also be
+edited.
+
+!!Delete
+This button allows one to delete an image from the program.

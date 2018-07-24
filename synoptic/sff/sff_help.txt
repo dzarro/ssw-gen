@@ -1,0 +1,67 @@
+Solar Flare Finder is an interactive widget to search for solar flares
+observed by various combinations of space-based solar observatories.
+The code searches a pre-generated text file for all GOES events from
+1-May-2010 until the most recent update (i.e. since the launch of SDO).
+It uses Sam Freeland's SSW Latest Events list from the HEK which
+supplies flare locations using AIA 131A images.
+It is assumed that AIA and HMI were observing continuously.
+
+The filenames listed after performing a search contain the following
+information: (e.g., 20140204_152500_M1_hsi100_megsab_eis_sot_xrt_iris.png)
+"20140204_152500" = GOES start time/SOL number
+"M1" = GOES class
+"hsi100" = RHESSI observed 100% of the GOES rise phase
+"megsab_eis_sot_xrt_iris" = flare was also observed by MEGS-A and -B,
+all 3 Hinode instruments and IRIS.
+
+The plots shown after selecting a given filename include:
+1) The GOES X-ray (black) and Lya (grey, when available) lightcurves with 
+the timing of Hinode, SDO/EVE, and IRIS observations overlaid
+2) RHESSI lightcurves up to the maximum energy detected
+3) An SDO/AIA 131A (or Proba2/SWAP 171A or XRT), full-disk image with
+the fields of view of the Hinode and IRIS instruments overlaid. The
+white circle denotes the flare location from AIA images. RHESSI
+contours are overlaid in black if available. These may not always agree.
+
+Optional search criteria include:
+GOES Class: B, C, M, X, or All.
+
+RHESSI coverage: >0% or >90% of the rise phase of the flare as determined
+by the duration that the RHESSI flare flag was active between the GOES
+start and peak times. Or no preference.
+
+RHESSI max. energy: the maximum energy detected by RHESSI as noted in
+the RHESSI flare list. Or no preference.
+
+SDO/AIA location: On disk (>-600"/<+600") or near the limb (<-600"/>+600"), or
+no preference.
+
+Hinode/EIS: If any EIS raster overlapped with the GOES event time, and
+the AIA flare location was within the EIS FOV, then all EIS rasters within 
+-30/+60 minutes of the GOES start/end time are shown.
+(uses EIS_LIST_RASTER.PRO)
+
+Hinode/SOT: If any SOT image was taken within the GOES event time, and
+the AIA flare location was within the SOT FOV, then all SOT images within 
+-30/+60 minutes of the GOES start/end time are shown.
+(uses SOT_CAT.PRO)
+
+Hinode/XRT: If any XRT image was taken within the GOES event time, and
+the AIA flare location was within the XRT FOV, then all XRT images within 
+-30/+60 minutes of the GOES start/end time are shown.
+(uses XRT_CAT.PRO)
+
+EVE MEGS-A: MEGS-A was assumed to have been observing continuously
+from 1-May-2010 until it suffered a power anomaly on
+26-May-2014. However, flares ~<C5 may not be apparent in the actual data.
+
+EVE MEGS-B: MEGS-B data have been taken intermittently since SDO was
+launched due to unforeseen detector degradation. Times for which
+MEGS-B was exposed for periods of >1 hour are listed at
+http://lasp.colorado.edu/eve/data_access/evewebdata/interactive/megsb_daily_exposure_hours.html
+Flares are listed for which MEGS-B was exposed continuously during the
+GOES rise phase.
+
+IRIS: Uses the HEK to search for IRIS studies that overlap with the
+GOES events times.
+(uses IRIS_OBS2HCR.PRO)
