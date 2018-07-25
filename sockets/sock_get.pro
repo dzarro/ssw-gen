@@ -132,6 +132,7 @@ if (progress[0] eq 1) && (progress[1] gt 0) then begin
 endif
 
 if ~exist(bsize) then bsize=0l
+
 if ptr_valid(data) then begin
  (*data).bsize=bsize
  if ((*data).completed || (*data).cancelled) then xkill,(*data).pid
