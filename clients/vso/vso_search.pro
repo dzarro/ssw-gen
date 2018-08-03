@@ -43,8 +43,9 @@
 ;               Ver 2.2, 30-May-2012, Hourcle.  Fixed docs (vso_get example)
 ;               Ver 2.3, 22-Apr-2013, Zarro. Added COUNT output keyword
 ;               Ver 2.4, 31-Jul-2017, Zarro. Made DATE keyword explicit
+;                        08-Aug-2018, ARD. Modified contact
 ;
-; Contact     : oneiros@grace.nascom.nasa.gov
+; Contact     : help@virtualsolar.org
 ;               http://virtualsolar.org/
 ;
 ; Input:
@@ -128,7 +129,7 @@
 ;   for expanding these 'summary' records into individual observations
 ;   in the future.
 ; * If you have a query that's not returning what you're expecting,
-;   please contact :  joseph.a.hourcle AT nasa.gov
+;   please contact :  help@virtualsolar.org
 ;   (and make sure to send the query!)
 ;
 ; Source / Instrument / Detector / Phys. Obs. / Layout / Extent Tye / etc:

@@ -19,8 +19,9 @@
 ;               Ver 2,   27-Aug-2010, J A Hourcle.  rewrite so it's both relatively intuitive & still useful
 ;                        the older (more complex) version might get revived under a different name
 ;                        23-Nov-2011, J A Hourcle.  actually doing the rewrite, not just document the plan
+;                        08-Aug-2018, ARD. Modified contact
 ;
-; Contact     : oneiros@grace.nascom.nasa.gov
+; Contact     : help@virtualsolar.org
 ;               http://virtualsolar.org/
 ;
 ; Input Keywords (flags):

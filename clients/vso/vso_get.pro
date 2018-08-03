@@ -61,8 +61,9 @@
 ;                      - removed PROTOCOL=1.0 constraint
 ;                17-Oct-14, Hourcle - removed SHA warning re: URLs
 ;                13-Feb-18, Zarro (ADNET) - added check for null results returned by ::GETDATA
+;              08-Aug-2018, ARD. Modified contact
 ;
-; Contact     : oneiros@grace.nascom.nasa.gov
+; Contact     : help@virtualsolar.org
 ;               http://virtualsolar.org/
 ; Inputs:
 ;   ARGS : Can be one of:

@@ -38,7 +38,7 @@
 ;               environment variable string check.
 ;               19-Sep-2017, Kim Tolbert. In deserialize method, concatenate xmlstring into one string, otherwise,
 ;               as happened recently, xmlstring can be an array of strings, and the parser->dom call fails.  
-;
+;               08-Aug-2018, ARD. Modified contact
 ;
 ; Limitations : This implementation only understands HTTP transports, currently.
 ;               IDL has no concept of 'null' other than a null pointer, so if you
@@ -48,7 +48,7 @@
 ;               See vso__define.pro for an example in deserializing a known
 ;                return structure.
 ;
-; Contact     : oneiros@grace.nascom.nasa.gov
+; Contact     : help@virtualsolar.org
 ;-
 ; a generic SOAP object, based on D.Zarro's HTTP object, to support VSO requests
 ; requires 'xmlparser' object, to handle temp file generation

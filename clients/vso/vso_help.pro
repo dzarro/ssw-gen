@@ -17,8 +17,9 @@
 ;
 ; History     : Ver 1,  06-Dec-2010, J A Hourcle.  Released
 ;               Ver 1.1 15-Nov-2011, J A Hourcle.  Updated docs
+;               08-Aug-2018, ARD. Modified contact
 ;
-; Contact     : oneiros@grace.nascom.nasa.gov ; joseph.a.hourcle@nasa.gov
+; Contact     : help@virtualsolar.org
 ;               http://virtualsolar.org/
 ;
 ; Keywords:
@@ -276,7 +277,7 @@ pro vso_help, search=search, get=get, info=info, object=object, help=help, news=
 		'    http://docs.virtualsolar.org/IDL', $
 		'', $
 		'If you have questions or comments about these functions, contact ', $
-		'Joe Hourcle at oneiros'+at+'grace.nascom.nasa.gov or joseph.a.hourcle'+at+'nasa.gov', $
+		'help@virtualsolar.org', $
 	''], crlf)
 
 return & end
