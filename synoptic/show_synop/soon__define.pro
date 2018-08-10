@@ -28,7 +28,7 @@ endif
 for i=0,count-1 do begin
  index=self->get(i,/index)
  time=self->get(i,/time)
- xy=hel2arcmin(index.lat,-index.lon,date=time)*60.
+ xy=hel2arcmin(index.lat,index.lon,date=time)*60.
  crval1=xy[0] & crval2=xy[1]
  xcen=comp_fits_cen(index.crpix1,index.cdelt1,index.naxis1,crval1)
  ycen=comp_fits_cen(index.crpix2,index.cdelt2,index.naxis2,crval2)

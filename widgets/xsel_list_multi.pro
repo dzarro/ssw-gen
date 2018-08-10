@@ -44,6 +44,7 @@
 ;   11-Mar-2013, Kim.  Added initialization for n2_initial and check to set n2_item_sel only if 
 ;     n2_items is defined.
 ;   9-Feb-2018, Zarro (ADNET) - added optional /ALL button select option
+;   10-Aug-2018, Zarro (ADNET) - add index counter in listing
 ;-
 ;===========================================================================
 
@@ -106,12 +107,14 @@ tmp = widget_label (w_base, value=label, /align_center)
 
 ; On windows, need to define x size of widgets
 if os_family() eq 'Windows' then xsize=10+max(strlen(trim(items)))
+counter='('+trim(sindgen(n_elements(items)))+') '
+
 w_list = widget_list (w_base,  $
           /multiple, $
           /align_center, $
           ysize=nitems < 20, $
           xsize=xsize, $
-          value='  ' + trim(items) + '  ', $
+          value=counter+trim(items) + '  ', $
           uvalue=uvalue)
 widget_control, w_list, set_list_select=initial
 end

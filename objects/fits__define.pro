@@ -349,6 +349,7 @@ if is_blank(file) then begin
  return
 endif
 
+file=trim(file)
 nf=n_elements(file)
 local_file=strarr(nf)
 

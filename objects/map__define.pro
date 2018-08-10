@@ -114,8 +114,10 @@
 ;                - fixed bug with input being set to zero in ::SET
 ;                3 March 2017, Zarro (ADNET)
 ;                - added ROLL_CORRECT method
-;                8 February, Zarro (ADNET)
+;                8 February 2018, Zarro (ADNET)
 ;                - added multiple select map option to ::PLOTMAN
+;                10 August 2018, Zarro (ADNET)
+;                - fixed bug with COUNT (probably introduced by last mod)
 ;                                                                                                 
 ; Contact     : dzarro@solar.stanford.edu                                                         
 ;-                                                                                                
@@ -877,8 +879,8 @@ if ~obj_valid(plotman_obj) then plotman_obj=obj_new('plotman')
 if do_all then val=indgen(count) else val=k
 
 if (count gt 1) && do_all then begin
- val=self->select(cancel=cancel,count=count)
- if (cancel eq 1) || (count eq 0) then return
+ val=self->select(cancel=cancel,count=scount)
+ if (cancel eq 1) || (scount eq 0) then return
 endif
 
 ;14-sep-2016, ras, adding panel_description as an alternative
