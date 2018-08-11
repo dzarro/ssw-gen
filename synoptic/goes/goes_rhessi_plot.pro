@@ -40,6 +40,7 @@
 ; 14-May-2012, Kim.  Moved call to hsi_linecolors to after set_plot,'z' because in batch mode can't
 ;  call it for X
 ; 23-Feb-2015, Kim. Fixed bug - yminor should be 9, not 10 in 3 places.
+; 10-Aug-2018, Kim. Added writing Inoperative across plots (after changing rhessi_nosun_times.txt to include end of mission
 ;
 ;-
 
@@ -206,18 +207,24 @@ FOR i = 0, nplots-1 DO BEGIN
           q = where(tarray ge off.stime and tarray le off.etime, count)		
           IF count GT 1 THEN rhessi_sun[q] = 0
             
+          otext = ''
           if stregex(off.name, 'anneal', /fold, /boolean) then begin
-            text = 'Annealing'
+            otext = 'Annealing'
             off_color = ltgray
-          endif else begin
-            text = 'Offpointing'
+          endif
+          if stregex(off.name, 'inoperative', /fold, /boolean) then begin
+            otext = 'Inoperative'
+            off_color = ltgray
+          endif
+          if otext eq '' then begin
+            otext = 'Offpointing'
             off_color = ltblue
-          endelse
+          endif
           toff = [[tplot[0] > off.stime], [tplot[1] < off.etime]] - tplot[0] 
           ; Shade in the anneal or offpoint interval with pastel gray or blue         
           color_box, x=toff, color=off_color
           ; Draw night/saa shading again for offpointing, so they will show (be on top)
-          if text eq 'Offpointing' then begin
+          if otext eq 'Offpointing' then begin
             if night_t[0] ne -1 then for j=0,n_elements(night_t[0,*])-1 do color_box, x=night_t[*,j]-tplot[0], color=ltpurple
             if saa_t[0] ne -1 then for j=0,n_elements(saa_t[0,*])-1 do color_box, x=saa_t[*,j]-tplot[0], color=ltgreen
           endif
@@ -227,11 +234,11 @@ FOR i = 0, nplots-1 DO BEGIN
           ratio_off = off_dur / plot_dur
           ang = [80., 50., 30.]
           siz = [1, 2, 3]
-          rats = [0., .2, .45]  ; cutoffs for angles and size of text message for offpoint and anneal
+          rats = [0., .2, .45]  ; cutoffs for angles and size of otext message for offpoint and anneal
           cr = !y.crange ; log of y range
           yval = 10.^(cr[0] + .4*(cr[1]-cr[0])) ; yval will be .4 of distance from bottom to top of plot
           j = value_locate(rats, ratio_off) ; find where our ratio is among those cutoffs
-          if ratio_off gt .05 then xyouts, average(toff), yval, text, align=.5, $ 
+          if ratio_off gt .05 then xyouts, average(toff), yval, otext, align=.5, $ 
             orient=ang[j], charsize=siz[j], charthick=2, color=bw
         ENDIF  ; end of count gt 1 
 

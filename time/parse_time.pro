@@ -23,7 +23,8 @@
 ;               TAI = return time in TAI format
 ;               REGEX = user-supplied REGEX
 ;               UTC = return UTC format
-;               SHORT = shorten YMD to using 2 digit yer
+;               SHORT = shorten YMD to using 2 digit year
+;               MSECS = include optional _milliseconds
 ;
 ; History     : 10-Jan-2002, Zarro (EER/GSFC)
 ;               15-Dec-2004, Zarro (L-3Com/GSFC) - fixed IDL 6.1 space bug 
@@ -31,7 +32,9 @@
 ;               24-Oct-2010, Zarro (ADNET) 
 ;                - added optional underscore millisec delimiter
 ;               12-Nov-2014, Zarro (ADNET)
-;                - support filenames without prefixes (e.g. 20070326_234800_s4euB.fts)
+;                - support filenames without prefixes
+;                  (e.g. 20070326_234800_s4euB.fts)
+;               10-Aug-2018, Zarro (ADNET) -added /msecs
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
@@ -39,7 +42,7 @@
 function parse_time,file,delim=delim,err=err,count=count,ss=ss,ymd=ymd,$
                     separator=separator,tai=tai,vms=vms,truncate=truncate,$
                     extension=extension,regex=regex,names=names,_extra=extra,$
-                    utc=utc,short=short
+                    utc=utc,short=short,msecs=msecs
 
 if n_elements(file) gt 1 then $
  dprint,'% '+get_caller()+' calling PARSE_TIME: ',trim(n_elements(file))
@@ -63,14 +66,13 @@ if is_string(regex) then sregex=regex else begin
  hrs='([0-9]{0,2})'
  mins=hrs
  secs=hrs
- msecs='_?([0-9]{0,3})'
  rest='([^\.]+)?'
  rext='\.?(.+)?'
-
+ msec='_?([0-9]{0,3})'
  if is_string(delim) then tlim='\'+trim(delim) else tlim='_'
  slim2=tlim+'?'
  slim=tlim
- sregex='([^'+tlim+'\\/0-9]*)'+slim2+dyear+mons+days+slim+hrs+mins+secs+msecs+$
+ sregex='([^'+tlim+'\\/0-9]*)'+slim2+dyear+mons+days+slim+hrs+mins+secs+msec+$
         rest+rext
 endelse
 
@@ -91,8 +93,8 @@ times.day=reform(s[4,*],np,/overwrite)
 if ns gt 5 then times.hour=reform(s[5,*],np,/overwrite)
 if ns gt 6 then times.minute=reform(s[6,*],np,/overwrite)
 if ns gt 7 then times.second=reform(s[7,*],np,/overwrite)
-if ns gt 8 then times.millisecond=reform(s[8,*],np,/overwrite)
-if arg_present(extension) and (ns gt 10) then extension=comdim2(s[10,*])
+if (ns gt 8) && keyword_set(msecs) then times.millisecond=reform(s[8,*],np,/overwrite)
+if arg_present(extension) && (ns gt 10) then extension=comdim2(s[10,*])
 
 ;-- quick Y2K fix year
 
