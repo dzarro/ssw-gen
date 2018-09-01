@@ -8,6 +8,7 @@
 ; Category    : Objects
 ;
 ; History     : 4 July 2018, Zarro (ADNET) - written
+;               11 Aug 2018, Zarro (ADNET) - switched to using WCS2MAP
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
@@ -20,9 +21,10 @@ if is_blank(header) then return,null()
 wcs_temp = fitshead2wcs(header)
 date = wcs_temp.time.observ_date
 
+pangle=(pb0r(date))[0]
 rsun0 = asin(wcs_rsun() / wcs_temp.position.dsun_obs) * !radeg * 3600
 rsun = rsun0 * fxpar(header, 'rv')
-angle = !dtor * (fxpar(header, 'pa') - fxpar(header,'p'))
+angle = !dtor * (fxpar(header, 'pa') - pangle)
 crval = [-rsun * sin(angle), rsun * cos(angle)]
 
 ;-- generate a new WCS in HPC coordinates.
@@ -31,7 +33,7 @@ wcs = wcs_2d_simulate( wcs_temp.naxis[0], wcs_temp.naxis[1], $
                        crpix=wcs_temp.crpix, crval=crval, $
                        cdelt=wcs_temp.cdelt, cunit=['arcsec','arcsec'], $
                        date_obs=wcs_temp.time.observ_date, $
-                       crota2=-fxpar(header,'p') )
+                       crota2=-pangle )
 
 return,wcs
 end

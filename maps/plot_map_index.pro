@@ -265,6 +265,9 @@
 ;               - if /LOG_SCALE && ALL DATA <= 0 then use linear scale 
 ;                Zarro (ADNET) 3 December 2016
 ;               - added /ABOUT_CENTER
+;                Zarro (ADNET) 15 Aug 2018
+;               - changed times in common to string format (easeier to
+;                 read)
 ;                 
 ; Contact     : dzarro@solar.stanford.edu
 ;-
@@ -296,7 +299,7 @@ pro plot_map_index,map,contour=cont,overlay=overlay,smooth_width=smooth_width,bo
 
 ;-- some variables saved in memory for overlay
 
-common plot_map_index2,last_window,last_time,last_drange,last_top,last_bottom,$
+common plot_map_index,last_window,last_time,last_drange,last_top,last_bottom,$
        last_xrange,last_yrange,last_multi,last_roll,last_rcenter,$
        last_b0,last_l0,last_rsun,saved_map,last_roll_correct,last_center
 
@@ -565,9 +568,9 @@ endif
 ;-- if solar rotating, check that we are rotating relative to last time image
 ;   rotated
 
-atime=get_map_time(map,/tai)
+atime=get_map_time(map)
 rtime=atime
-otime=get_map_time(map,/tai,/original)
+otime=get_map_time(map,/original)
 mtitle=get_map_prop(map,/id,def='')
 if ~over then begin
  err=''
