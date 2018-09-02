@@ -44,6 +44,8 @@
 ;                - return nearest entry if only start time entered
 ;                - added option for FTYPE to appear anywhere in search
 ;                  result (def is beginning).
+;               1-Sep-2018, Zarro (ADNET)
+;                - added MONTH_NAME property
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
@@ -181,7 +183,7 @@ pro site::setprop,site=site,tstart=tstart,tend=tend,ext=ext,ftype=ftype,back=bac
               err=err,rhost=rhost,suffix=suffix,round=round,$
               topdir=topdir,regex=regex,telim=telim,dtype=dtype,$
               cache=cache,forward=forward,_extra=extra,intervals=intervals,$
-              org=org,last_time=last_time,full=full,$
+              org=org,last_time=last_time,full=full,month_name=month_name,$
               no_order=no_order,delim=delim,password=password,username=username
 
 err=''
@@ -192,6 +194,7 @@ if size(site,/tname) eq 'STRING' then self.site=trim(site)
 
 if is_string(delim,/blank) then self.delim=trim(delim)
 if exist(full) then self.full=keyword_set(full)
+if exist(month_name) then self.month_name=keyword_set(month_name)
 if is_string(rhost) then self.rhost=trim(rhost)
 if is_string(topdir) then begin
  tdir=trim2(topdir)
@@ -291,6 +294,7 @@ print,'% ftype: ',self.ftype
 print,'% cache: ',self.cache
 print,'% org: ',self.org
 print,'% full: ',self.full
+print,'% month_name: ',self.month_name
 print,'% delim: ',self.delim
 print,'% telim: ',self.telim
 print,'% regex: ',self.regex
@@ -308,7 +312,7 @@ function site::get_sdir,_extra=extra
 if self.org eq 'none' then return, ''
 
 return,get_fid(self.tstart,self.tend,_extra=extra,delim=self.delim,$
-               full=self.full,org=self.org)
+               full=self.full,org=self.org,month_name=self.month_name)
 
 end
 
@@ -576,6 +580,7 @@ pro site__define
 ; suffix: suffix to append to directory name
 ; full: use full year name for remote subdirs (e.g. 2002/02/01)
 ; round: round start search times to start of current day
+; month_name: include abbreviate month name with month (e.g. 03MAR)
 ; regex: regular expression to filter filenames (supplements ftype &
 ; ext)
 ; telim: delimiter for time component of filename (def='_',
@@ -584,7 +589,7 @@ pro site__define
 
 temp={site,site:'',rhost:'',topdir:'',ext:'',ftype:'',tstart:0d,tend:0d,$
       intervals:ptr_new(),password:'',username:'',$
-      cache:0b,org:'',full:0b,suffix:'',round:0b,dtype:'',$
+      cache:0b,org:'',full:0b,month_name:0b,suffix:'',round:0b,dtype:'',$
       last_time:1b,delim:'',regex:'',telim:'',inherits gen}
 
 return & end

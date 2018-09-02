@@ -13,6 +13,33 @@
 ; Contact     : dzarro@solar.stanford.edu
 ;-
 
+function soon::init,_ref_extra=extra
+
+ret=self->fits::init(_extra=extra)
+if ~ret then return,ret
+
+ret=self->site::init(_extra=extra)
+if ~ret then return,ret
+
+self->setprop,rhost='ftp://soon.colorado.edu',delim='/',/full,$
+      org='day',topdir='/SOONAR',ftype='SOON',ext='fits',/month_name
+
+return,1
+
+end
+
+;--------------------------------------------------------------------------
+;-- search SOON archive 
+
+function soon::search,tstart,tend,_ref_extra=extra,count=count,type=type
+
+type=''
+files=self->site::search(tstart,tend,_extra=extra,count=count)
+if count gt 0 then type=replicate('H-alpha/images',count) else files=''
+return,files
+end
+
+;-----------------------------------------------------------------------------
 ;-- determine the positions in arcseconds from Sun center of the reference pixel.
 
 function soon::get_wcs,header
@@ -63,10 +90,18 @@ self->set_colors,i,index
 
 return & end
 
-;-----------------------------------------------------
+;----------------------------------------------------------------------------
 
+pro soon::cleanup
+
+self->fits::cleanup
+self->site::cleanup
+
+return & end
+
+;-----------------------------------------------------
 pro soon__define,void                 
 
-void={soon, inherits fits}
+void={soon, inherits fits, inherits site}
 
 return & end

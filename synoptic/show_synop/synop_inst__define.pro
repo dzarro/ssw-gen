@@ -35,6 +35,8 @@
 ;               - added MK4 (from MLSO)
 ;               28-Jul-2016, Zarro (ADNET)
 ;               - added EVE file prefixes
+;               1-Sep-2018, Zarro (ADNET)
+;               - added SOON
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
@@ -69,6 +71,7 @@ names=[ 'Big Bear Solar Observatory (BBSO) | bbso',$
         'SOHO/MDI (Continuum) | mdi_c',$
         'SOHO/MDI (Magnetogram) | mdi',$
         'Solar X-ray Spectrometer (SOXS) | soxs',$
+        'SOON (H-alpha) | soon',$
         'STEREO/SECCHI-COR1 | cor1',$
         'STEREO/SECCHI-COR2 | cor2',$
         'STEREO/SECCHI-EUVI | euvi',$
@@ -89,13 +92,13 @@ function synop_inst::get_class,file,verbose=verbose
 
 if is_blank(file) then return,'fits'
 
-acro=['iris','SXI','xrs','(^hmi|_aia_blos|_aia_cont)','(^aia|_AIA_[0-9])','^(EVL|EVS|EVE|esp_)','\.les','^glg','^(prepped_)?eis','^mdi','^cont','^fdmg','^(prepped_)?xrt','^kanz','^eit','^(prepped_)?efr',$
+acro=['soon','iris','SXI','xrs','(^hmi|_aia_blos|_aia_cont)','(^aia|_AIA_[0-9])','^(EVL|EVS|EVE|esp_)','\.les','^glg','^(prepped_)?eis','^mdi','^cont','^fdmg','^(prepped_)?xrt','^kanz','^eit','^(prepped_)?efr',$
       '^(prepped_)?efz','^trac','^(prepped_)?tri','^hxrbs',$
       '^mg1','^bbso','^kpno','^rstn','^phnx','^hxr','^(prepped_)?[^ ]+(euA\.|euB\.)',$
       '^ovsa','^osra','\.xrs|\.hsi)','^(ifa|ifb|ifz|ifs)','^(na|nb)','^(mh|mt)','^BLEN',$
       '^(prepped_)?[^ ]+(c1A\.|c1B\.)','^(prepped_)?[^ ]+(c2A\.|c2B\.)','^eovsa', '\.mk4\.rpb']
 
-class=['iris','sxi','messenger','hmi','aia','eve','soxs','fermi_gbm','eis','mdi','mdi','mdi','xrt2','kanz','eit','eit','eit',$
+class=['soon','iris','sxi','messenger','hmi','aia','eve','soxs','fermi_gbm','eis','mdi','mdi','mdi','xrt2','kanz','eit','eit','eit',$
        'trace','trace','smm_hxrbs',$
        'spirit','bbso','kpno','rstn','ethz','hxrs','euvi',$
        'ovsa_ltc','osra','synop_spex','nobeyama','nancay','meudon','callisto','cor1','cor2','eovsa','mk4']

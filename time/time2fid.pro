@@ -18,8 +18,11 @@
 ;               TIME = include _HHMM in output 
 ;               YEAR_ONLY = include year only
 ;               DELIM = delimiter between year, month, & day
+;               MONTH_NAME = include name in month (e.g. 03MAR)
 ;
 ; History     : Written 6 Jan 1999, D. Zarro (SM&A/GSFC)
+;               31-Aug-2018, Zarro (ADNET)
+;               - added MONTH_NAME
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
@@ -44,16 +47,16 @@ return & end
 
 function time2fid,date,err=err,no_day=no_day,full_year=full_year,time=time,$
                   year_only=year_only,delim=delim,seconds=seconds,$
-                  milliseconds=milliseconds
+                  milliseconds=milliseconds,month_name=month_name,_extra=extra
 
 err=''
 tdate=anytim2utc(date,/ext,err=err)
 if err ne '' then begin
- message,err,/cont
+ mprint,err,/cont
  return,''
 endif
 
-include_day=1-keyword_set(no_day)
+include_day=~keyword_set(no_day)
 include_month=1b
 if keyword_set(year_only) then begin
  include_day=0b & include_month=0b
@@ -69,7 +72,12 @@ y2k_patch,syear,oyear,full_year=full_year
 
 fid=str_format(oyear,yform)
 if ~is_string(delim) then delim=''
-if include_month then fid=fid+delim+str_format(tdate.month,form)
+if include_month then begin
+ mon=str_format(tdate.month,form)
+ smonth=''
+ if keyword_set(month_name) then smonth=list_months(tdate.month-1,/tru,/upper)
+ fid=fid+delim+mon+smonth
+endif
 if include_day then fid=fid+delim+str_format(tdate.day,form)
 ext='_'+str_format(tdate.hour,form)+delim+str_format(tdate.minute,form)
 if keyword_set(time) then begin
