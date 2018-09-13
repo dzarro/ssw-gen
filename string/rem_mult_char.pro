@@ -9,7 +9,6 @@
 ;               
 ; Use         : result = rem_mult_char(string [, char ,/all])  
 ;
-;    
 ; Inputs      : string - string variable in which to compress all multiple
 ;                        characters
 ;               
@@ -18,34 +17,18 @@
 ;               
 ; Outputs     : Function returns compressed string
 ;               
-; Opt. Outputs: None
-;               
 ; Keywords    : ALL - if present all occurrences of the named character will
 ;                     be deleted.
 ;
-; Calls       : None
-;               
-; Restrictions: None
-;               
-; Side effects: None
-;               
 ; Category    : Util, string
 ;               
-; Prev. Hist. : None
-;
 ; Written     : C D Pike, RAL, 6-Mar-95
-;               
 ; Modified    : Handle edge effects.  CDP, 10-mar-95
+; Modified    : replaced () with [] for variables to prevent conflicts with functions  T. Kucera, 12-Sep-2018
 ;
-; Version     : Version 2, 10-Mar-95
 ;-            
 
 function rem_mult_char, in_str, char, all=all
-
-; 
-;  on error return to caller
-;
-On_error,2
 
 ;
 ;  check have all parameters
@@ -56,7 +39,6 @@ if n_params() eq 0 then begin
    print,'  prints --> This_is_untidy_spacing'
    return,''
 endif
-
 
 ;
 ;  default character is space
@@ -77,16 +59,16 @@ text = str_sep(str,char)
 ;  kill duplicates
 ;
 n = where(text ne '')
-if n(0) ge 0 then text = text(n)
+if n[0] ge 0 then text = text[n]
 
 ;
 ;   put it back together
 ;
-arr = text(0)
+arr = text[0]
 if keyword_set(all) then begin
-   for i=1,n_elements(text)-1 do arr = arr+text(i)
+   for i=1,n_elements(text)-1 do arr = arr+text[i]
 endif else begin
-   for i=1,n_elements(text)-1 do arr = arr+char+text(i)
+   for i=1,n_elements(text)-1 do arr = arr+char+text[i]
 endelse
 
 ;
