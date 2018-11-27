@@ -61,6 +61,7 @@
 ;  30-Aug-2016, Zarro (ADNET) - perform query check first
 ;  17-Sep-2016, Zarro (ADNET) - added port 443 for HTTPS
 ;  18-Dec-2016, Zarro (ADNET) - added check for appended port
+;  19-Oct-2016, Zarro (ADNET) - replace SSW_STRSPLIT call with STRMID
 ;-
 
 function url_parse, url
@@ -82,9 +83,18 @@ function url_parse, url
   ; remove QUERY first to allow free form queries
   
   query='' ; init to No Query
-  if strpos(durl,'?') ne -1 then query=ssw_strsplit(durl,'?',/tail, head=durl) ; divide URL/QUERY
-  durl=durl[0]
-  query=query[0]
+  dpos=strpos(durl,'?')
+  if dpos ge 0 then begin
+   dlen=strlen(durl)
+   query=strmid(durl,dpos+1,dlen-1-dpos)
+   durl=strmid(durl,0,dpos)
+  endif
+
+;-- following has issues if a second "?" is included in QUERY
+
+;   query=ssw_strsplit(durl,'?',/tail, head=durl) ; divide URL/QUERY
+;   durl=durl[0]
+;   query=query[0]
 
   ; find the beginning of the host component
   ; if a '://' was not found then assume HTTP

@@ -23,10 +23,10 @@
 ;
 ; Outputs     : Result = new string.
 ;
-; Keywords    : all = replace all characters
-;               compress = if set, remove all spaces from output string
-;               notrim = if set, don't trim spaces out of new
-;               nopad = don't pad input string with blanks to match size
+; Keywords    : ALL = replace all characters
+;               COMPRESS = if set, remove all spaces from output string
+;               NOTRIM = if set, don't trim spaces out of new
+;               PAD = pad input string with blanks to match size
 ;               of replacement string
 ;
 ; Category    : String processing
@@ -40,6 +40,7 @@
 ;               1-Feb-2010, Kim Tolbert.  Added notrim keyword
 ;               30-Oct-2013, Zarro (ADNET) - Added NOPAD keyword
 ;               3-Mar-2015, Zarro (ADNET) - Renamed to STREP2
+;               21-Oct-2018, Zarro (ADNET) - made NOPAD the default
 ;-
 ;
 FUNCTION strep2,input,old,new,all=all,compress=compress, notrim=notrim, nopad=nopad            
@@ -52,7 +53,12 @@ FUNCTION strep2,input,old,new,all=all,compress=compress, notrim=notrim, nopad=no
 
 ;-- buffer so that new string tailors with old string
 
-   IF ~KEYWORD_SET(nopad) THEN BEGIN
+   do_pad=0b
+   if is_number(nopad) then begin
+    do_pad=fix(nopad) eq 0 
+   endif
+
+   IF do_pad THEN BEGIN
     IF lenn LT leno THEN BEGIN
      REPEAT BEGIN
         tnew=tnew+' '

@@ -39,6 +39,8 @@
 ;               19-Sep-2017, Kim Tolbert. In deserialize method, concatenate xmlstring into one string, otherwise,
 ;               as happened recently, xmlstring can be an array of strings, and the parser->dom call fails.  
 ;               08-Aug-2018, ARD. Modified contact
+;               9-Oct-2018, Zarro (ADNET)
+;                - added error check to POST return
 ;
 ; Limitations : This implementation only understands HTTP transports, currently.
 ;               IDL has no concept of 'null' other than a null pointer, so if you
@@ -161,8 +163,8 @@ function soap::post,method,args,debug=debug,_ref_extra=extra,err=err
     endif else $
         http->post, self->getprop(/proxy), self->envelope(method, args), $
           response,info=extra_headers,/xml,_extra=extra,err=err
-
-    return,response
+        if is_string(err) then return,''
+        return,response
 end
 
 ;=========

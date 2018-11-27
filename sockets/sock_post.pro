@@ -23,12 +23,16 @@
 ;                - allow posting blank content (for probing)
 ;               16-Sep-2016, Zarro (ADNET)
 ;               - added call to URL_FIX
-;              
+;               9-Oct-2018, Zarro (ADNET)
+;               - improved error checking
 ;-
 
-function sock_post,url,content,err=err,file=file,_ref_extra=extra
+function sock_post,url,content,err=err,file=file,$
+         _ref_extra=extra,response_header=response_header
+
 
 err='' & output=''
+response_header=''
 
 if ~since_version('6.4') then begin
  err='Requires IDL version 6.4 or greater.'
@@ -52,45 +56,54 @@ endif
 
 durl=url_fix(url,_extra=extra)
 ourl=obj_new('idlneturl2',durl,_extra=extra)
-
 cdir=curdir()
 error=0
+eflab=0b
 catch, error
-IF (error ne 0) then begin
+if (error ne 0) then begin
  catch,/cancel
- mprint,err_state()
+ err=err_state()
+ mprint,err
  message,/reset
+ eflag=1b
  goto,bail
 endif
 
 ;-- have to send output to writeable temp directory
 
 tdir=get_temp_dir()
-sdir=concat_dir(tdir,'temp'+get_rid())
+mk_temp_dir,tdir,sdir,err=err
+if is_string(err) then begin
+ mprint,err
+ return,output
+endif
 
-file_mkdir,sdir
 cd,sdir
-result=''
+rfile=''
 if is_string(content) then dcontent=content else dcontent=''
-
-result = ourl->put(dcontent,/buffer,/post)
+rfile = ourl->put(dcontent,/buffer,/post)
+eflag=is_blank(rfile)
 
 ;-- clean up
 
 bail: cd,cdir
+ourl->getproperty,response_filename=efile,response_header=respoonse_header
 if obj_valid(ourl) then obj_destroy,ourl
 
-sresult=file_search(sdir,'*.*',count=count)
-if count eq 1 then result=sresult[0]
-if ~file_test(result) then begin
+if eflag then begin
  mprint,'POST request failed.'
- return,''
+ if is_string(efile) then begin
+  if file_test(efile,/regular) && ~file_test(efile,/zero_length) then begin
+   if getenv('DEBUG') ne '' then print,rd_ascii(efile)
+   rfile=efile
+  endif
+ endif
 endif
 
-if keyword_set(file) then return,result 
-output=rd_ascii(result)
+if keyword_set(file) then output=rfile else output=rd_ascii(rfile)
 
 file_delete,sdir,/quiet,/recursive,/allow_nonexistent
 
-return,output 
+return,output
+
 end  

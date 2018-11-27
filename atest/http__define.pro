@@ -212,6 +212,8 @@
 ;                - made PORT a long variable
 ;                9-Oct-2018, Zarro (ADNET)
 ;                - added error check to POST return
+;                17-Nov-2018, Zarro (ADNET)
+;                - added check for password without username
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
@@ -375,8 +377,10 @@ if protocol eq 1.1 then header=[header,host]
 
 username=self->hget(/username)
 password=self->hget(/password)
-if is_string(username) && is_string(password) then begin
- auth=username+':'+password
+
+if is_string(username) then begin
+ auth=username
+ if is_string(password) then auth=username+':'+password
  bauth=idl_base64(byte(auth))
  bhead='Authorization: Basic '+bauth
  header=[header,bhead]

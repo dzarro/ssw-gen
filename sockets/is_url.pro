@@ -28,6 +28,8 @@
 ;               -switched parse_url back to url_parse
 ;               10-March-2017, Zarro (ADNET)
 ;               - added SECURE and QUERY keywords
+;               11-Oct-2018, Zarro (ADNET)
+;               - added CATCH
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
@@ -39,8 +41,18 @@ compressed=0b & ftp=0b
 secure=0b & query=0b
 read_remote=0b
 if is_blank(file) then return,0b
-if file_test(file[0]) then return,0b
 
+error=0
+catch, error
+if (error ne 0) then begin
+; err=err_state()
+; mprint,err
+ message,/reset
+ catch,/cancel
+ return,0b
+endif
+
+if file_test(file[0]) then return,0b
 stc=url_parse(file[0])
 query=is_string(stc.query)
 chk=is_string(stc.host)

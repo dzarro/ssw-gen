@@ -21,7 +21,7 @@
 
 function is_blank,input
 
-return,1b-is_string(input) 
+return,~is_string(input) 
 
 end
 

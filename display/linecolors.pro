@@ -78,6 +78,7 @@
 ;       SQUEEZE:  opposite of NOSQUEEZE (this is the default)
 ;       HELP:     If set and device='x', display a colorbar with indices
 ;		  (!d.window is reset to original window number)
+;	QUIET : If set, don't print info message
 ;
 ; OUTPUT:
 ;	LINE_R : If present, returns the red color gun values for this new
@@ -101,7 +102,7 @@
 ;
 ; SIDE EFFECTS:
 ;	The color table side will be determined by the current device
-;	If the device is not 'X' or 'WIN', an informational message will be printed.
+;	If the device is not 'X' or 'WIN' and QUIET is not set an informational message will be printed.
 ;
 
 ; RESTRICTIONS:
@@ -177,20 +178,23 @@
 ;	MAY 93 - If mycol_r,g,b arrays are passes they are added
 ;		 after the distinct colors, not instead.
 ;       23-sep-94 (SLF) - added HELP keyword (display color bar with indices)
-;		2-Aug-2000, Kim Tolbert - everywhere it checks for X, make it also check for WIN
+;	      2-Aug-2000, Kim Tolbert - everywhere it checks for X, make it also check for WIN
 ;       17-May-2004 - Einfalt - merged the ssw and the eit ops versions, by adding
 ;                     the /image keyword, which if set, will put the line colors at
 ;		      the top of the array, not bottom.
 ;       14-Mar-2005 - S.L.Freeland - added the historically documented but missing NOSQUEEZE keyword
 ;                     to the routine def; kept undocumented but defined SQUEEZE for backward-compat.
+;       21-Sep-2018, Kim Tolbert - Added quiet keyword
 ;-
 
 pro linecolors, mycol_r=mycol_r, mycol_g=mycol_g, mycol_b=mycol_b, $
 		line_r=line_r, line_g=line_g, line_b=line_b, table=table, $
 		noload=noload, notop=notop, squeeze=squeeze, nosqueeze=nosqueeze, used=used, $
-                image=image, error=error, help=help
+                image=image, error=error, help=help, quiet=quiet
 
 common colors, r_orig, g_orig, b_orig, r_curr, g_curr, b_curr
+
+checkvar, quiet, 0
 
 error = 0
 nosqueeze=keyword_set(nosqueeze)
@@ -330,7 +334,7 @@ squeeze=1-nosqueeze or keyword_set(squeeze) ; default
 ; If not 'X' or 'WIN' then tell the user what they have just done.
 ;
 
-  if !d.name ne 'X' and !d.name ne 'WIN' then message, /info, strtrim(!d.table_size,2) + $
+  if !d.name ne 'X' and !d.name ne 'WIN' and ~quiet then message, /info, strtrim(!d.table_size,2) + $
 			 ' color table indices set for ' + !d.name + ' device.'
 
 ; slf - added HELP keyword and function

@@ -9,6 +9,7 @@
 ;
 ; History     : 4 July 2018, Zarro (ADNET) - written
 ;               11 Aug 2018, Zarro (ADNET) - switched to using WCS2MAP
+;               03-Oct-2018, Kim - changed host from soon.colorado.edu to soonar.colorado.edu
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
@@ -21,7 +22,7 @@ if ~ret then return,ret
 ret=self->site::init(_extra=extra)
 if ~ret then return,ret
 
-self->setprop,rhost='ftp://soon.colorado.edu',delim='/',/full,$
+self->setprop,rhost='ftp://soonar.colorado.edu',delim='/',/full,$
       org='day',topdir='/SOONAR',ftype='SOON',ext='fits',/month_name
 
 return,1

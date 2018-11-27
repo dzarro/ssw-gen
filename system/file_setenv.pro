@@ -13,7 +13,7 @@
 ; Outputs     : Environment variables: $AAA=BBB
 ;
 ; Keywords    : VERBOSE = set for verbose output
-;               INFORM = set to inform user that program is running
+;               DEBUG = set to debug user that program is running
 ;
 ; History     : 21-Feb-2010, Zarro (ADNET) - written
 ;               6-Feb-2016, Zarro (ADNET) 
@@ -21,26 +21,26 @@
 ;               1-May-2017, Zarro (ADNET) 
 ;               - added check for quoted " " values
 ;               11-Aug-2017, Zarro (ADNET)
-;               - added INFORM keyword
+;               - added DEBUG keyword
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
 
-pro file_setenv,file,verbose=verbose,_extra=extra,inform=inform
+pro file_setenv,file,verbose=verbose,_extra=extra,debug=debug
 
 verbose=keyword_set(verbose)
-inform=keyword_set(inform)
+debug=keyword_set(debug)
 
 if is_blank(file) then return
 dfile=local_name(file)
 chk=file_test(dfile,/read,/regular)
 if ~chk then begin
- if inform then mprint,'File file not found - '+dfile
+ if debug then mprint,'File file not found - '+dfile
  message,/reset
  return
 endif
 
-if inform then mprint,'Executing - '+dfile
+if debug then mprint,'Executing - '+dfile
 
 a=strcompress(rd_ascii(dfile))
 ;d=stregex(a,'(.*)(setenv) +([^ ]+) +([^ ]+)',/extract,/sub,/fold)

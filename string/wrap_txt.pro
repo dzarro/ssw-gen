@@ -52,6 +52,8 @@
 ; MODIFICATIONS:
 ;       4-Apr-2005, Kim. added no_dollar keyword
 ;       3-Jul-2018, Kim. Fixed small bug when checking if idx is set(can't use n_elements(idx) eq 1)
+;       2-Oct-2018, Kim. If we need to wrap a line, make sure that if it was commented out (first 
+;         non-blank char is ';'), the subsequent wrapped lines also start with ';'
 ;-
 
 function wrap_txt, str_in, length=length, delim=delim, warning=warning, no_dollar=no_dollar
@@ -62,7 +64,7 @@ function wrap_txt, str_in, length=length, delim=delim, warning=warning, no_dolla
   checkvar, delim, ','
   dollar = keyword_set(no_dollar) ? '' : ' $'
 
-    for index = 0,n_elements(str_in)-1 do begin
+  for index = 0,n_elements(str_in)-1 do begin
     str = str_in[index]
     line = str
     if strlen(str) le length then goto, nextline
@@ -111,7 +113,12 @@ function wrap_txt, str_in, length=length, delim=delim, warning=warning, no_dolla
 
     nextline:
     n_new = n_elements(line)
-    if n_new gt 1 then line[0:n_new-2] = line[0:n_new-2] + dollar
+    ; If next line has more than one line, we need to put a dollar at end of all but last, and if first line
+    ; has a ; in first non-space character, need to put ; in front of subsequent lines to make them all comments.
+    if n_new gt 1 then begin      
+      line[0:n_new-2] = line[0:n_new-2] + dollar
+      if strmid(trim(line[0]),0,1) eq ';' then line[1:n_new-1] = ';' + line[1:n_new-1]
+    endif
     lines = append_arr(lines, line)
   endfor
 

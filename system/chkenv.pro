@@ -1,106 +1,71 @@
 ;+
-; Project     : VSO
+; Project     : RHESSI
 ;
 ; Name        : CHKENV
-
-; Purpose     : Translate environment variable. Supports array inputs
-;               and translating substrings 
-;               (e.g. $SSW/gen/idl -> /solarsoft/gen/idl)
 ;
-; Inputs      : VAR = String (scalar or array) to be translated
+; Purpose     : Wrapper around GETENV that checks substrings
+;               separated by delimiter (e.g. $SSW/test')
 ;
-; Outputs     : OVAR = translated string
+; Category    : system utility string
 ;
-; Keywords    : DELIM = delimiter to use for separating substrings
-;               PRESERVE = return input name if no translation found
-;               LOCAL = set to force return output using OS-dependent delimiters
-;               NORECURSE = do not recurse on substrings
+; Inputs      : VAR = string variable to check
 ;
-; Category    : Utility, System
+; Outputs     : OVAR = expanded environment variable
 ;
-; Written     : 15-Jan-14, Zarro (ADNET)
+; Keywords    : PRESERVE = return input VAR if not expanded (def='']
+;               RECURSE = recurse on output (= 1,2,3...)
+;               DELIMITER= delimiter to split substrings on (def = /,\)
+;               FIX_DELIMITER = convert all delimiters to OS-specific values
 ;
-; Contact     : dzarro@stanford.edu
+; History     : 17-Oct-2018 Zarro (ADNET) - written
+;
+; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
 
-  function chkenv_s,var,norecurse=norecurse,delim=delim,$
-                       preserve=preserve,local=local
+   function chkenv,var,_extra=extra,delimiter=delimiter,$
+    preserve=preserve,fix_delimiter=fix_delimiter,debug=debug,$
+    recurse=recurse 
 
    preserve=keyword_set(preserve)
-   recurse=~keyword_set(norecurse)
-   local=keyword_set(local)
-   var=trim2(var)
-
-;-- parse out user-delimiters
-
-   tvar=getenv(var)
-   if tvar eq '' then tvar=var
-   if is_string(delim) then begin
-    lvar=str2arr(tvar,delim=delim)
-    if n_elements(lvar) gt 1 then begin
-     result=chkenv(lvar,/norecurse,/preserve,local=local)
-     ovar=arr2str(result,delim=delim)
-     if (ovar eq var) and ~preserve then return,''
-     return, local ? local_name(ovar,/no_expand) : ovar
-    endif
-   endif
-
-;-- parse out OS-delimiters
-   
-   if recurse then begin
-    pieces=strsplit(tvar,'(\\|/|\.)',/regex,/extract)
-    np=n_elements(pieces)
-    ovar=tvar
-    for i=0,np-1 do begin
-     opiece=chkenv(pieces[i],/preserve,/norecurse,local=local)
-     ovar=strep2(ovar,pieces[i],opiece,_extra=extra,/nopad)
-    endfor
-    if (ovar eq var) and ~preserve then return,''
-    return, local ? local_name(ovar,/no_expand) : ovar
-   endif
  
-   svar=var
-
-;-- check for preceding $
-
-   doll=strpos(svar,'$')
-   if doll eq 0 then begin
-    name=trim2(getenv(svar))
-    if name eq '' then begin
-     tvar=strmid(svar,1,strlen(svar))
-     name=trim2(getenv(tvar))
-    endif
-   endif else begin
-    name=trim2(getenv(svar))
-   endelse
-   
-;-- finally expand tildes
-
-   os=os_family(/lower)
-   if os eq 'unix' then begin
-    if name ne '' then temp=name else temp=svar
-    tilde=strpos(temp,'~')
-    if (tilde gt -1) then name=expand_tilde(temp)
+   if is_blank(var) then begin
+    if exist(var) && preserve then return,var else return,''
    endif
 
-   if n_elements(name) eq 1 then name=name[0]
-   name=trim2(name)
-   translated=name[0] ne ''
-   if preserve and ~translated then name[0]=var
+   if is_number(recurse) then nrec=fix(recurse) > 0 else nrec=0
+   debug=keyword_set(debug)
+   if debug then mprint,var
+   fix_delimiter=keyword_set(fix_delimiter)
+   svar=getenv2(trim(var[0]),/preserve)
 
-   return, local ? local_name(name,/no_expand) : name
-   end
+;-- expand on delimiters
   
-;--------------------------------------------------------------------------
+   delim='\\|\/' & regex=1b
+   if is_string(delimiter) then begin
+    delim=delimiter & regex=0b
+   endif
 
-   function chkenv,var,_ref_extra=extra
+   ovar=str_break(svar,delimiter=delim,count=count,regex=regex)
+   if count gt 0 then begin
+    for i=0,count-1 do begin
+     if debug then help,ovar[i]
+     evar=getenv2(ovar[i],/preserve)
+     if evar ne ovar[i] then svar=strep2(svar,ovar[i],evar)
+    endfor
+   endif
 
-   if ~is_string(var) then return,''   
-   np=n_elements(var)
-   for i=0,np-1 do begin
-    tvar=chkenv_s(var[i],_extra=extra)
-    ovar=append_arr(ovar,tvar,/no_copy)
-   endfor
+;-- recurse on output to expand deeper 
 
-   return,ovar
+   if nrec gt 0 then begin
+    for i=0,nrec-1 do svar=chkenv(svar,/preserve,delimiter=delim,debug=debug)
+   endif
+
+   if (svar eq var) then begin
+    if preserve then return,var else return,''
+   endif
+
+   if fix_delimiter then svar=fix_slash(svar)
+   return,svar
+
    end
+        

@@ -9,10 +9,6 @@
 ;
 ; Syntax      : IDL> http_proxy,/disable,[/enable]
 ;
-; Inputs      : None
-;
-; Outputs     : None
-;
 ; Keywords    : DISABLE = undefine HTTP_PROXY environment variables
 ;               ENABLE = redefine HTTP_PROXY environment variables
 ;
@@ -33,14 +29,14 @@ if is_string(tproxy1) && is_blank(proxy1) then proxy1=tproxy1
 if is_string(tproxy2) && is_blank(proxy2) then proxy2=tproxy2
 
 if disable then begin
- mprint,'Disabling proxy.',/debug
+; mprint,'Disabling proxy.',/debug
  mklog,'HTTP_PROXY',''
  mklog,'http_proxy',''
  return
 endif
 
 if enable then begin
- mprint,'Re-enabling proxy.',/debug
+; mprint,'Re-enabling proxy.',/debug
  if is_string(proxy1) then mklog,'HTTP_PROXY',proxy1
  if is_string(proxy2) then mklog,'http_proxy',proxy2
 endif
