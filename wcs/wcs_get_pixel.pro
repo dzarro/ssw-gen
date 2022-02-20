@@ -49,7 +49,17 @@
 ;               TOLERANCE  = Convergence tolerance for reiterative technique
 ;                            used by the MOL projection.
 ;
-;               MAX_ITER   = Maximum number of iterations.  Default is 1000.
+;               MAX_ITER   = Maximum number of iterations for the MOL
+;                            projection.
+;
+;               TOLERANCE and MAX_ITER are also used for inverting distortion
+;               corrections, in which case the defaults are 1E-3 (pixels) and
+;               100 respectively.  See WCS_INV_PROJ_MOL for the defaults when
+;               applied to the MOL projection.  Depending on the projection,
+;               these keywords may also be used for the forward projection, in
+;               which case the 
+;
+;               NODISTORTION = If set, then don't apply any distortion keywords.
 ;
 ; Calls       :	VALID_WCS, PRODUCT
 ;
@@ -67,16 +77,22 @@
 ;               Version 3, 21-Dec-2005, William Thompson, GSFC
 ;                       Added projections AIR,CSC,MOL,PCO,QSC,TSC,ZPN
 ;                       Added keywords TOLERANCE, MAX_ITER
+;               Version 4, 03-Jul-2019, WTT, Handle distortion keywords
 ;
 ; Contact     :	WTHOMPSON
 ;-
 ;
 function wcs_get_pixel, wcs, coord, quick=quick, force_proj=force_proj, $
-                        missing=missing, tolerance=tolerance, max_iter=max_iter
+                        missing=missing, tolerance=tolerance, $
+                        max_iter=max_iter, nodistortion=nodistortion
 on_error, 2
 ;
 if n_params() ne 2 then message, 'Syntax: Result = WCS_GET_PIXEL(WCS, COORD)'
 if not valid_wcs(wcs) then message, 'Input not recognized as WCS structure'
+;
+;  Determine whether or not the distortion correction should be applied.
+;
+apply_dist = tag_exist(wcs,'DISTORTION') and (not keyword_set(nodistortion))
 ;
 ;  Calculate the indices for each dimension, relative to the reference pixel.
 ;
@@ -197,6 +213,63 @@ endelse
 ;
     for i=0,n_axis-1 do pixels[i,*] = pixels[i,*] + (wcs.crpix[i] - 1)
 ;
+;  If distortion keywords should be applied, then reiteratively correct the
+;  pixels until the distortion is matched.  First set up the parameters for the
+;  iteration.
+;
+if apply_dist then begin
+    coord0 = reform(coord, n_pixel_axes, n_elements)
+;
+;  Set the default pixel scale based either on CDELTi or CDi_j.
+;
+    if wcs.variation eq 'CD' then begin
+        i = indgen(n_pixel_axes)
+        delta = wcs.cd[i,i]
+    end else delta = wcs.cdelt
+;
+;  Reiterate until the correction falls below the tolerance, or the maximum
+;  number of iterations is reached.
+;
+    if n_elements(max_iter) ne 0 then imax_iter = max_iter else imax_iter = 100
+    if n_elements(tolerance) ne 0 then itolerance = tolerance else $
+      itolerance = 1e-3
+    i_iter = 0
+    repeat begin
+;
+;  Get the coordinates of the current pixel position, and get the derivative at
+;  that position.
+;
+        coord1 = wcs_get_coord(wcs, pixels, quick=quick, $
+                               force_proj=force_proj, tolerance=tolerance, $
+                               max_iter=max_iter)
+        coord2 = wcs_get_coord(wcs, pixels+1, quick=quick, $
+                               force_proj=force_proj, tolerance=tolerance, $
+                               max_iter=max_iter)
+        deriv = coord2 - coord1
+;
+;  If the derivative couldn't be calculated, then try subtracting one.
+;
+        w = where(total((deriv eq 0) or ~finite(deriv), 1), count)
+        if count gt 0 then begin
+            coord2 = wcs_get_coord(wcs, pixels[*,w]-1, quick=quick, $
+                                   missing=missing, force_proj=force_proj, $
+                                   tolerance=tolerance,max_iter=max_iter)
+            derive[*,w] = coord1[*,w] - coord2
+        endif
+;
+;  If it still can't be calculated then use the default pixel scale.
+;
+        w = where(total((deriv eq 0) or ~finite(deriv), 1), count)
+        if count gt 0 then for i=0,n_pixel_axes-1 do deriv[i,w] = delta[i]
+;
+;  Apply the correction.
+;
+        corr = (coord1 - coord0) / deriv
+        pixels = pixels - corr
+        i_iter = i_iter + 1
+    endrep until (max(abs(corr), /nan) le itolerance) or (i_iter ge imax_iter)
+endif
+;
 ;  If the MISSING keyword was passed, then flag any missing pixels.  Otherwise,
 ;  missing pixels should already be flagged as NaN.
 ;
@@ -207,7 +280,6 @@ endif
 ;
 ;  Reformat the coordinate array into the proper dimensions.
 ;
-REFORMAT:
 if n_elements(coord) gt 0 then begin
     if sz[0] le 1 then pixels = reform(pixels, [n_axis], /overwrite) else $
       pixels = reform(pixels, [n_axis, dim[1:sz[0]-1]], /overwrite)

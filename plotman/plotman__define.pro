@@ -468,6 +468,8 @@
 ; 15-Feb-2018, Kim.  Use home_dir to save preference settings instead of get_temp_dir because on Windows the
 ;   .plotman... files in the temp dir kept disappearing.
 ; 13-Jul-2018, Kim. Changed overlay defaults to NOT solar rotate (drotate=0) and color of first overlay=white (was blue)
+; 29-Sep-2020, Kim. In set, we try *self.data->get(/timerange) then time_range to get time range of data. Previously
+;   made those attempts in reverse order, but utplot and specplot obj use timerange, so try that first.
 ;-
 ;
 ;=========================================================================
@@ -1569,9 +1571,9 @@ pro plotman::set, plot_type=plot_type, _extra=_extra, err_msg=err_msg
           endif
           ; added valid_range check 30-jul-2007
           if not valid_range(self.plot_control.timerange) then self.plot_control.timerange = [0.d0, 0.d0]
-          trange = anytim(*self.data -> get (/time_range))
+          trange = anytim(*self.data->get(/timerange))
           if not valid_range(trange) then begin
-            try = anytim(*self.data->get(/timerange))
+            try = anytim(*self.data->get(/time_range))
             if valid_range(try) then trange = try
           endif
 

@@ -78,6 +78,7 @@
 ;			Added keyword CODE_ONLY
 ;               Version 7, William Thompson, GSFC, 27 July 2004
 ;                       Added keyword QUOTED
+;               Version 8, WTT, 20-July-2019, use FILE_SEARCH(/TEST_REGULAR)
 ;
 ; Version     : Version 7, 27 July 2004
 ;-
@@ -141,8 +142,8 @@
 ;
 ;  Find all the files of the requested type in the current path.
 ;
-		CD, D1  &  FILES1 = FINDFILE(FILES, COUNT=N1)
-		CD, D2  &  FILES2 = FINDFILE(FILES, COUNT=N2)
+		CD, D1  &  FILES1 = FILE_SEARCH(FILES, COUNT=N1, /TEST_REGULAR)
+		CD, D2  &  FILES2 = FILE_SEARCH(FILES, COUNT=N2, /TEST_REGULAR)
 		CD, CWD
 		IF (N1+N2) NE 0 THEN BEGIN
 ;

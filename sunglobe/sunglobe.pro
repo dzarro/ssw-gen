@@ -73,7 +73,7 @@
 ;                           spaces for new images on the fly.
 ;
 ; Calls       :	SUNGLOBE_MAKE_OBJECTS, SUNGLOBE_MAKE_IMAGE_WIDGETS,
-;               SUNGLOBE_LOAD_EPHEM, SUNGLOBE_SPICE_FOV__DEFINE
+;               WHICH, LOAD_SUNSPICE, SUNGLOBE_SPICE_FOV__DEFINE
 ;
 ; Common      :	None
 ;
@@ -101,6 +101,16 @@
 ;                       Move send point option to SUNGLOBE_CONVERT subwidget
 ;               Version 11, 05-Mar-2018, WTT, add magnetic connection point
 ;               Version 12, 02-Apr-2018, WTT, unbounded number of images
+;               Version 13, 14-Jan-2019, WTT, added local FITS option
+;               Version 14, 18-Jan-2019, WTT, added "Use ephemeris value" button
+;               Version 15, 04-Mar-2019, WTT, call LOAD_SUNSPICE directly
+;                       instead of using temporary routine SUNGLOBE_LOAD_EPHEM
+;               Version 16, 01-Apr-2019, WTT, added NOAA active region option
+;               Version 17, 03-Apr-2019, WTT, added change spacecraft option
+;               Version 18, 10-Apr-2019, WTT, added Connection Tool option
+;               Version 19, 24-Dec-2019, WTT, added Adjust Pointing option
+;               Version 20, 21-Jan-2021, WTT, added Solar Orbiter option
+;               Version 21, 17-Aug-2021, WTT, added FOV paint options
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -117,7 +127,7 @@ if n_elements(k_spacecraft) eq 1 then spacecraft = k_spacecraft
 if keyword_set(earth) and (n_elements(spacecraft) eq 0) then $
   spacecraft = 'Earth'
 if n_elements(spacecraft) eq 0 then spacecraft = "Solar Orbiter"
-which,'parse_sunspice_name',/quiet,out=temp
+which,'parse_sunspice_name',/quiet,outfile=temp
 if temp ne '' then spacecraft = parse_sunspice_name(spacecraft)
 ;
 ;  Check the validity of the target date.
@@ -154,10 +164,18 @@ wtopbase = widget_base(title='SunGlobe', xpad=0, ypad=0, $
 wfilemenu = widget_button(barbase, value='File')
 waddhv = widget_button(wfilemenu, value='Read in Helioviewer image', $
                        UVALUE='ADDHV')
+waddfits = widget_button(wfilemenu, value='Read in local FITS file', $
+                         UVALUE='ADDFITS')
+waddsoar = widget_button(wfilemenu, value='Read from Solar Orbiter archive', $
+                         UVALUE='ADDSOAR')
 wgetpfss = widget_button(wfilemenu, value='Read in PFSS magnetic field', $
                          UVALUE='GETPFSS')
 wgetconnect = widget_button(wfilemenu, uvalue='GETCONNECT', $
                             value='Estimate magnetic connection point')
+wreadconnfile = widget_button(wfilemenu, uvalue='READCONNFILE', $
+                              value='Read magnetic connection file')
+wchangesc = widget_button(wfilemenu, uvalue='SPACECRAFT', $
+                          value='Change spacecraft')
 wsave = widget_button(wfilemenu, value='Save images', UVALUE='SAVE')
 wrestore = widget_button(wfilemenu, value='Restore images', $
                          UVALUE='RESTORE')
@@ -184,22 +202,48 @@ wresetbutton = widget_button(wactionbutton, value='Reset all', $
 ;
 wconfigbutton = widget_button(barbase, value='Configure')
 ;
-;  The FOV configuration buttons depend on which spacecraft was selected.
-;
-if spacecraft eq '-144' then begin
-    wspiceconfig = widget_button(wconfigbutton, uvalue='CONFIGSPICE', $
-                                 value='Configure SPICE field-of-view')
-    weuiconfig = widget_button(wconfigbutton, uvalue='CONFIGEUI', $
-                               value='Configure EUI field-of-view')
-    wphiconfig = widget_button(wconfigbutton, uvalue='CONFIGPHI', $
-                               value='Configure PHI field-of-view')
-end else begin
-    wgenconfig = widget_button(wconfigbutton, uvalue='CONFIGGEN', $
-                               value='Configure field-of-view')
-endelse
-;
 worbitconfig = widget_button(wconfigbutton, uvalue='CONFIGORBIT', $
                              value='Configure orbit trace')
+;
+;  The FOV configuration buttons depend on which spacecraft was selected.
+;
+wfovconfig = lonarr(3)
+if spacecraft eq '-144' then begin
+    wfovconfig[0] = widget_button(wconfigbutton, uvalue='CONFIGSPICE', $
+                                  value='Configure SPICE field-of-view')
+    wfovconfig[1] = widget_button(wconfigbutton, uvalue='CONFIGEUI', $
+                                  value='Configure EUI field-of-view')
+    wfovconfig[2] = widget_button(wconfigbutton, uvalue='CONFIGPHI', $
+                                  value='Configure PHI field-of-view')
+end else begin
+    wfovconfig[0] = widget_button(wconfigbutton, uvalue='CONFIGGEN', $
+                                  value='Configure field-of-view')
+    for i=1,2 do wfovconfig[i] = widget_button(wconfigbutton, value='', $
+                                               uvalue='', sensitive=0)
+endelse
+;
+;  Define the Paint FOV pull-down menu.
+;
+wpaintbutton = widget_button(barbase, value='Paint FOV')
+;
+;  The FOV paint buttons depend on which spacecraft was selected.
+;
+wfovpaint = lonarr(3)
+if spacecraft eq '-144' then begin
+   wfovpaint[0] = widget_button(wpaintbutton, uvalue='PAINTSPICE', $
+                                value='Paint SPICE field-of-view')
+   wfovpaint[1] = widget_button(wpaintbutton, uvalue='PAINTEUI', $
+                                value='Paint EUI field-of-view')
+   wfovpaint[2] = widget_button(wpaintbutton, uvalue='PAINTPHI', $
+                                value='Paint PHI field-of-view')
+end else begin
+   wfovpaint[0] = widget_button(wpaintbutton, uvalue='PAINTGEN', $
+                                value='Paint field-of-view')
+   for i=1,2 do wfovpaint[i] = widget_button(wpaintbutton, value='', $
+                                             uvalue='', sensitive=0)
+endelse
+dummy = widget_button(wpaintbutton, uvalue='ERASEPAINT', $
+                      value='Erase paint')
 ;
 ;  Define the Options pull-down menu.
 ;
@@ -210,25 +254,33 @@ wshowpfss = widget_button(woptionbutton, value='PFSS magnetic field on/off', $
                           uvalue='SHOWPFSS')
 wshowconnect = widget_button(woptionbutton, uvalue='SHOWCONNECT', $
                              value='Magnetic connection point on/off')
+wshowconnfile = widget_button(woptionbutton, uvalue='SHOWCONNFILE', $
+                              value='Connection file image on/off')
 wbore = widget_button(woptionbutton, value='Spacecraft boresight on/off', $
                       uvalue='BORESIGHT')
+worbit = widget_button(woptionbutton, value='Orbit trace on/off', $
+                       uvalue='ORBIT')
+wnar = widget_button(woptionbutton, value='Active region IDs on/off', $
+                     uvalue='NAR')
 ;
 ;  The FOV on/off buttons depend on which spacecraft was selected.
 ;
+wfovonoff = lonarr(3)
 if spacecraft eq '-144' then begin
-    wspicefov = widget_button(woptionbutton, value='SPICE field-of-view on/off', $
-                              uvalue='SPICEFOV')
-    weuifov = widget_button(woptionbutton, value='EUI field-of-view on/off', $
-                            uvalue='EUIFOV')
-    wphifov = widget_button(woptionbutton, value='PHI field-of-view on/off', $
-                            uvalue='PHIFOV')
+    wfovonoff[0] = widget_button(woptionbutton, uvalue='SPICEFOV', $
+                                 value='SPICE field-of-view on/off')
+    wfovonoff[1] = widget_button(woptionbutton, uvalue='EUIFOV', $
+                                 value='EUI field-of-view on/off')
+    wfovonoff[2] = widget_button(woptionbutton, uvalue='PHIFOV', $
+                                 value='PHI field-of-view on/off')
 end else begin
-    wgenfov = widget_button(woptionbutton, value='Field-of-view on/off', $
-                            uvalue='GENFOV')
+    wfovonoff[0] = widget_button(woptionbutton, uvalue='GENFOV', $
+                                 value='Field-of-view on/off')
+    for i=1,2 do wfovonoff[i] = widget_button(woptionbutton, value='', $
+                                              uvalue='', sensitive=0)
 endelse
-;
-worbit = widget_button(woptionbutton, value='Orbit trace on/off', $
-                       uvalue='ORBIT')
+dummy = widget_button(woptionbutton, uvalue='PAINTFOV', $
+                      value='Field-of-view paint on/off')
 ;
 ;  Define the help button.
 ;
@@ -265,6 +317,8 @@ wxsc = cw_field(wscpoint, /frame, /row, uvalue="SCPOINT", value=xsc, $
 ysc = 0.0
 wysc = cw_field(wscpoint, /frame, /row, uvalue="SCPOINT", value=ysc, $
                  title="Y", /return_events, /float, xsize=9)
+wuseephem = widget_button(wephembase, value='Use ephemeris values', $
+                          uvalue='EPHEMPNT', sensitive=0)
 ;
 ;  Create widgets for controlling the globe orientation.
 ;
@@ -321,6 +375,8 @@ wup   = widget_button(wmove, value='Move up',   UVALUE='UP',   SENSITIVE=0)
 wdown = widget_button(wmove, value='Move down', UVALUE='DOWN', SENSITIVE=0)
 wopacity = cw_fslider(wselected, minimum=0.0, maximum=1.0, value=0.0, $
                       title='Opacity', UVALUE='OPACITY', /drag, /frame, /edit)
+wadjust = widget_button(wselected, value='Adjust pointing', UVALUE='ADJUST', $
+                        SENSITIVE=0)
 wdelete = widget_button(wselected, value='Delete', UVALUE='DELETE', SENSITIVE=0)
 ;
 ;  Set up the draw widget.
@@ -352,7 +408,8 @@ sunglobe_make_image_widgets, wrightbase, wimagebases, pimagestates, $
 ;
 ;  Load the ephemeris data.
 ;
-sunglobe_load_ephem, spacecraft
+which, 'load_sunspice', /quiet, outfile=temp
+if temp ne '' then load_sunspice, spacecraft
 ;
 ;  Get the inverse of the current translate matrix.
 ;
@@ -366,6 +423,7 @@ sstate={waddhv: waddhv, $                               ;Widget IDs
         wxsc: wxsc, $
         wysc: wysc, $
         wconvert: wconvert, $
+        wuseephem: wuseephem, $
         wselorient: wselorient, $
         wyaw: wyaw, $
         wpitch: wpitch, $
@@ -380,8 +438,12 @@ sstate={waddhv: waddhv, $                               ;Widget IDs
         wup: wup, $
         wdown: wdown, $
         wopacity: wopacity, $
+        wadjust: wadjust, $
         wdelete: wdelete, $
         wdraw: wdraw, $
+        wfovconfig: wfovconfig, $
+        wfovpaint: wfovpaint, $
+        wfovonoff: wfovonoff, $
         wrightbase: wrightbase, $                       ;Base for images
         wimagebases: wimagebases, $                     ;Image bases
         pimagestates: pimagestates, $                   ;Image states
@@ -409,7 +471,10 @@ sstate={waddhv: waddhv, $                               ;Widget IDs
         ogen: obj_new(), $
         opfss: obj_new(), $
         oconnect: obj_new(), $
+        pconnfile: ptr_new(), $
+        pfovpaint: ptr_new(), $
         oorbit: obj_new(), $
+        onar: obj_new(), $
         origtranslate: sobject.origtranslate, $   ;Translation matrix to reset
         origrotate: sobject.origrotate, $         ;Rotation matrix to reset
         mpoint: mpoint, $                         ;Inverse of translate matrix
@@ -423,12 +488,15 @@ sstate={waddhv: waddhv, $                               ;Widget IDs
         hidegrid: 0, $                            ;Grid on/off
         hidepfss: 0, $                            ;PFSS on/off
         hideconnect: 0, $                         ;Connection on/off
+        hideconnfile: 0, $                        ;Connection file image on/off
         hidebore: 1, $                            ;Boresight on/off
         hidespice: 1, $                           ;SPICE FOV on/off
         hideeui: 1, $                             ;EUI FOV on/off
         hidephi: 1, $                             ;PHI FOV on/off
         hidegen: 1, $                             ;Generic FOV on/off
+        hidefovpaint: 1, $                        ;FOV paint on/off
         hideorbit: 1, $                           ;Orbit trace on/off
+        hidenar: 1, $                             ;NOAA IDs on/off
         spacecraft: spacecraft, $                 ;Spacecraft ID
         test_offset: round(test_offset), $        ;Ephemeris offset (years)
         target_date: target_date}                 ;Target date
@@ -469,6 +537,13 @@ if temp ne '' then begin
     sstate.omodelrotate->add, sstate.oorbit
     sstate.ocontainer->add, sstate.oorbit
 endif
+;
+;  Create the NAR object
+;
+sstate.onar = obj_new('sunglobe_nar', sstate=sstate, target_date=target_date, $
+                      /hide, _extra=_extra)
+sstate.omodelrotate->add, sstate.onar
+sstate.ocontainer->add, sstate.onar
 ;
 ;  Initialize the UVALUE of the topbase.
 ;

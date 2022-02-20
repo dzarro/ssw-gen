@@ -99,6 +99,8 @@ pro plot_goes, i1, i2,  bcolor=bcolor, quiet=quiet, 	$
 ;            S.L.Freeland - /ascii defaults to /ONE_MINUTE (/FIVE to override)
 ;                           fix historical /one & /five logic (ydb_exist search override)
 ;            S.L.Freeland - 4-dec-2009 - add /PRIMARY & /SECONDARY (SEC 1-dec-2009 file name chnage)
+;            S.L.Freeland - 29-jan-2020 - allow input from ssw_get_goesdata(/xrays,/GXD)
+;            S.L.Freeland - 19-may-2020 - relax 29-jan required tags to allow ncei/goesn/goesr -> ssw_noaa_goes2ssw output
 ;
 ;  Side Effects:
 ;     /fast switch causes color table 15 load
@@ -158,7 +160,8 @@ yrange=[101,679]				; default is gxt files
 gxrin=0
 ;if data_chk(i1,/struct) then gxrin=tag_names(i1,/struct) eq 'GXR_DATA_REC'
 ;GXR_DATA_REC to GXD_DATA_REC, jmm 8-aug-1996
-if data_chk(i1,/struct) then gxrin=tag_names(i1,/struct) eq 'GXD_DATA_REC';
+if data_chk(i1,/struct) then gxrin=tag_names(i1,/struct) eq 'GXD_DATA_REC' or $
+   required_tags(i1,'lo,hi') ; allow input from ssw_get_goesdata.pro or ssw_noaa_goes2ssw(/gxd)
 
 ; ------------------------------------------------------------------------
 if not gxrin then begin	
@@ -235,6 +238,7 @@ gkeyword='/goes'+ strtrim(gnum,2)
       if loud then message,/info,mess
       case 1 of 		; messy due to maintaining existing logic
          ascii: begin
+if get_logenv('check_rd_goesx_ascii') ne '' then stop,'rd_goesx_ascii,input1,input2'
                 rd_goesx_ascii,input1,input2,gxr_rec,  $
                    goes9=goes9, goes8=goes8, goes10=goes10, goes11=goes11,goes12=goes12, goes13=goes13, goes14=goes14, goes15=goes15,  $
                    five_minute=five_minute, one_minute=(1-five_minute), $
@@ -271,6 +275,7 @@ gapsize=10						;dont plot gaps
 labels=['G7 Low','G6 Low','G7 High','G6 High']
 delim=['',': ']
 
+if required_tags(i1,'satellite') then gnum=i1[0].satellite
 if exist(gnum) then mtitle='GOES '+ strtrim(gnum,2) + ' X-Rays' 
 
 if keyword_set(nodeftitle) then mtitle=''

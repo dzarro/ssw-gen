@@ -69,6 +69,7 @@
 ;               NO_RTIME = inhibit adding RTIME tag
 ;               ABOUT_CENTER = use center of map when adjusting for roll
 ;               (overrides ROLL_CENTER keyword which may be different)
+;               ALIGN_CENTER = align centers of map array (turns on TRACK)
 ;
 ; History     : Written 22 November 1997, D. Zarro, SAC/GSFC
 ;               Modified 27 Sept 1999, Zarro (SM&A/GSFC) -- removed
@@ -144,6 +145,9 @@
 ;               - added DIMENSIONS 
 ;               - fixed bug with roll correction not being applied
 ;                 correctly when overlaying maps
+;               26 July 2019, Zarro (ADNET)
+;               - fixed bug with /TRACK not working when MAP is an array
+;               - added /ALIGN_CENTER
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
@@ -159,7 +163,7 @@ function drot_map,map,duration,_extra=extra,proj_rcenter=proj_rcenter,$
                   preserve_area=preserve_area,adjust_resolution=adjust_resolution,xrange=xrange,yrange=yrange,$
                   b0=b0,l0=l0,rsun=rsun,xp=xp,yp=yp,no_project=no_project,$
                   no_data=no_data,olimb=olimb,no_roll_correct=no_roll_correct,$
-                  about_center=about_center
+                  about_center=about_center,align_center=align_center
 
 if ~valid_map(map) then begin
  pr_syntax,'rmap=drot_map(map,duration,[time=time])'
@@ -188,13 +192,14 @@ if keyword_set(fast) then $
 
 ;-- check keywords
 
+align_center=keyword_set(align_center)
 verbose=keyword_set(verbose)
 proj_rcenter=keyword_set(proj_rcenter)
 same_center=keyword_set(same_center)
 no_drotate=keyword_set(no_drotate)
 preserve_area=keyword_set(preserve_area)
 adjust_resolution=keyword_set(adjust_resolution)
-track_center=keyword_set(track_center)
+track_center=keyword_set(track_center) || align_center
 about_center=keyword_set(about_center)
 if preserve_area || adjust_resolution then track_center=0b
 remap=~keyword_set(no_remap)
@@ -220,9 +225,9 @@ endcase
 
 ;-- get solar rotation duration
 
-dtime=get_drot_dur(map,tdur,time=etime,_extra=extra)
-cur_time=get_map_time(map,/tai)
- 
+;dtime=get_drot_dur(map,tdur,time=etime,_extra=extra)
+;cur_time=get_map_time(map,/tai)
+
 ;-- translate after rotation?
 
 xs=0.d0 & ys=0.d0
@@ -244,13 +249,20 @@ sub_range=valid_range(xrange) && valid_range(yrange)
 for i=0,nmp-1 do begin
  pmap=map[i]
 
+;-- get solar rotation duration
+
+ dtime=get_drot_dur(pmap,tdur,time=etime,_extra=extra)
+ cur_time=get_map_time(pmap,/tai)
+
 ;-- check if differentially rotating
 
- cdur=dtime[i < (ntime-1)]
+; cdur=dtime[i < (ntime-1)]
+ cdur=dtime
+
  if no_drotate then cdur=0.
  dprint,'% duration (sec): ',cdur
- new_time=cur_time[i]+cdur
- do_drot=(new_time ne cur_time[i])
+ new_time=cur_time+cdur
+ do_drot=(new_time ne cur_time)
 
  if do_drot && (cdur gt 180*sec_per_deg) then begin
   message,'Warning, most of Sun will rotate over limb',/cont
@@ -332,16 +344,15 @@ for i=0,nmp-1 do begin
 ;-- check if recentering 
 ;  (if an array of images, then track relative to first)
 
- do_center=0
- if (i eq 0) && (nmp gt 1) then new_center=double([xc,yc])
+ do_center=0b & delvarx,new_center
  if n_elements(dcenter) eq 2 then new_center=double(dcenter)
  if n_elements(center) eq 2 then new_center=double(center)
- if exist(new_center) then $
-  do_center=(new_center[0] ne xc) || (new_center[1] ne yc)
+ if exist(acenter) && align_center && (i > 0) then new_center=acenter
+ if exist(new_center) then do_center=(new_center[0] ne xc) || (new_center[1] ne yc)
 
 ;-- check if resizing
 
- if i eq 0 then new_size=double([nx,ny])
+ new_size=double([nx,ny])
  if n_elements(dsize) eq 2 then new_size=dsize
  if n_elements(outsize) eq 2 then new_size=double(outsize)
  if n_elements(dimensions) eq 2 then new_size=double(dimensions)
@@ -349,7 +360,7 @@ for i=0,nmp-1 do begin
   
 ;-- check if rebinning
 
- if i eq 0 then new_space=[dx,dy]
+ new_space=[dx,dy]
  if do_resize then begin
   new_space[0]=dx*double(nx)/double(new_size[0])
   new_space[1]=dy*double(ny)/double(new_size[1])
@@ -357,7 +368,6 @@ for i=0,nmp-1 do begin
  if n_elements(dspace) eq 2 then new_space=double(dspace)
  if n_elements(resolution) eq 1 then new_space=double([resolution,resolution])
  if n_elements(resolution) eq 2 then new_space=double(resolution)
-
  do_rebin=(new_space[0] ne dx) || (new_space[1] ne dy) || adjust_resolution
 
  dprint,'%do_drot: ', do_drot
@@ -375,7 +385,7 @@ for i=0,nmp-1 do begin
  if ~have_roll_center then pmap=add_tag(pmap,[xc,yc],'roll_center',index='roll_angle',/no_copy)
 
  if verbose then begin
-  help,/st,anytim2utc(cur_time[i],/vms),pstart
+  help,/st,anytim2utc(cur_time,/vms),pstart
   help,/st,anytim2utc(new_time,/vms),pend
   help,curr_roll,new_roll
   print,'CURR_RCENTER',curr_rcenter
@@ -416,7 +426,7 @@ for i=0,nmp-1 do begin
                    (curr_rcenter[1] ge min(pyrange)))
    if roll_in_image && (do_proj || do_drot) && proj_rcenter then begin
     if verbose && (i eq 0)  then message,'projecting roll center',/cont
-    temp=rot_xy(curr_rcenter[0],curr_rcenter[1],tstart=cur_time[i],$
+    temp=rot_xy(curr_rcenter[0],curr_rcenter[1],tstart=cur_time,$
          tend=new_time,_extra=extra,/sphere,$
          vstart=pstart,vend=pend)
     drot_rcenter=reform(temp)
@@ -448,7 +458,7 @@ for i=0,nmp-1 do begin
 
   xr=reform(temporary(xr),fsize)
   yr=reform(temporary(yr),fsize)
-  rcor=rot_xy(xr,yr,tstart=cur_time[i],tend=new_time,$
+  rcor=rot_xy(xr,yr,tstart=cur_time,tend=new_time,$
               _extra=extra,/sphere,vstart=pstart,vend=pend,err=err)
   if is_string(err) then begin
    mprint,err
@@ -517,21 +527,23 @@ for i=0,nmp-1 do begin
 ;-- first make a regularized grid using only pixels that are still in fov
 ;   (i.e. limb pixels and disk pixels that haven't projected over limb)
 
-  if same_center then new_center=get_map_prop(map[i],/center)
+  if ~exist(acenter) then begin
+   if same_center then new_center=[xc,yc]
 
 ;-- track FOV center 
 
-  if track_center && (do_proj || do_drot) then begin
-   xcen=xc  & ycen=yc
-   if have_roll then roll_xy,xcen,ycen,-curr_roll,xcen,ycen,rcenter=curr_rcenter
-   ncenter=rot_xy(xcen,ycen,tstart=cur_time[i],tend=new_time,$
-           _extra=extra,/sphere,$
-           vstart=pstart,vend=pend)
-   ncenter=reform(ncenter)
-   xcen=ncenter[0] & ycen=ncenter[1]
-   if do_roll then roll_xy,xcen,ycen,new_roll,xcen,ycen,rcenter=new_rcenter else $
-    if have_roll then roll_xy,xcen,ycen,curr_roll,xcen,ycen,rcenter=drot_rcenter
-   new_center=[xcen,ycen]
+   if track_center && (do_proj || do_drot) then begin
+    xcen=xc  & ycen=yc
+    if have_roll then roll_xy,xcen,ycen,-curr_roll,xcen,ycen,rcenter=curr_rcenter
+    ncenter=rot_xy(xcen,ycen,tstart=cur_time,tend=new_time,$
+            _extra=extra,/sphere,$
+            vstart=pstart,vend=pend)
+    ncenter=reform(ncenter)
+    xcen=ncenter[0] & ycen=ncenter[1]
+    if do_roll then roll_xy,xcen,ycen,new_roll,xcen,ycen,rcenter=new_rcenter else $
+     if have_roll then roll_xy,xcen,ycen,curr_roll,xcen,ycen,rcenter=drot_rcenter
+    new_center=[xcen,ycen]
+   endif
   endif
 
   if (fcount lt fsize) && exist(fov) then begin
@@ -576,7 +588,7 @@ for i=0,nmp-1 do begin
 
    xr=reform(temporary(xr),onx*ony)
    yr=reform(temporary(yr),onx*ony)
-   rcor=rot_xy(xr,yr,tstart=new_time,tend=cur_time[i],$
+   rcor=rot_xy(xr,yr,tstart=new_time,tend=cur_time,$
                _extra=extra,/sphere,vstart=pend,vend=pstart,err=err)
    if is_string(err) then begin
     mprint,err
@@ -637,6 +649,7 @@ done:
   if ~keyword_set(no_rtime) && (do_drot || do_proj) then pmap=add_tag(pmap,rtime,'rtime',/no_copy)
  endelse
  rmap=merge_struct(rmap,pmap,/no_copy)
+ if (i eq 0) && align_center then acenter=[pmap.xc,pmap.yc]
 endfor
 
 if exist(olimb2) then olimb=temporary(olimb2)

@@ -17,12 +17,13 @@
 ;             : SIZE = number of bytes in return content
 ;             : RESP_ARRAY = response header in string array format   
 ;
-; History     : 21-Feb-2015, Zarro (ADNET) - Written
+; History     : 21-Feb-2015, Zarro (ADNET) - written
 ;-
 
 pro sock_content_ftp,response,size=bsize,code=code,resp_array=resp,_ref_extra=extra
 
-resp='' & bsize=0l &  code=404L
+code=0L  
+resp='' & bsize=0l
 if is_blank(response) then return
 resp=response
 if n_elements(resp) eq 1 then resp=byte2str(byte(resp),newline=13,skip=2)

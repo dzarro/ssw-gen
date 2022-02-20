@@ -30,19 +30,19 @@ bsize=0l
 if is_blank(file) then begin
  err='Missing input file name.'
  pr_syntax,'data=file_stream(file)'
- return,!null
+ return,null()
 endif
 
 if ~file_test(file,/read,/regular) then begin
  err='Input file not found - '+file
  mprint,err
- return,!null
+ return,null()
 endif
 
 if file_size(file) eq 0 then begin
  err='Input file has zero size.'
  mprint,err
- return,!null
+ return,null()
 endif
 
 compressed=is_compressed(file)

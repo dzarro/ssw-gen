@@ -1,7 +1,8 @@
         FUNCTION FXPAR, HDR, NAME, ABORT, COUNT=MATCHES, COMMENT=COMMENTS, $
                         START=START, PRECHECK=PRECHECK, POSTCHECK=POSTCHECK, $
                         NOCONTINUE = NOCONTINUE, DATATYPE=DATATYPE, $
-                        NULL=K_NULL, NAN=NAN, MISSING=MISSING
+                        NULL=K_NULL, NAN=NAN, MISSING=MISSING, $
+                        MULTIVALUE=MULTIVALUE
 ;+
 ; NAME: 
 ;        FXPAR()
@@ -116,6 +117,8 @@
 ;                 e.g. MISSING='' for strings, MISSING=-1 for integers, or
 ;                 MISSING=-1.0 or /NAN for floating point.  /NAN should not be
 ;                 used if the datatype would otherwise be integer.
+;       /MULTIVALUE = Allow multiple values to be returned, if found in the
+;                     header.
 ; OPTIONAL OUTPUT KEYWORD:
 ;       COUNT   = Optional keyword to return a value equal to the number of
 ;                 parameters found by FXPAR.
@@ -170,8 +173,14 @@
 ;               Don't convert LONG64 numbers to to double precision
 ;       Version 12, William Thompson, 13-Aug-2014
 ;               Add keywords MISSING, /NAN, and /NULL
-;		Version 13, W. Landsman 25-Jan-2018
-;				Return ULONG64 integer if LONG64 would overflow
+;	Version 13, W. Landsman 25-Jan-2018
+;		Return ULONG64 integer if LONG64 would overflow
+;       Version 14, William Thompson, 03-Jun-2019
+;               Add /MULTIVALUE keyword
+;       Version 15, Mats Löfdahl, 11-Sep-2019
+;               Read CONTINUE mechanism multi-line comments.
+;       Version 16, William Thompson, 12-Apr-2021
+;               LONGSTRN no longer required.
 ;-
 ;------------------------------------------------------------------------------
 ;
@@ -274,10 +283,16 @@
             NFOUND = WHERE(KEYWORD EQ NAM, MATCHES)
             IF MATCHES EQ 0 AND START GE 0 THEN GOTO, RESTART
             IF START GE 0 THEN NFOUND = NFOUND + MN
-            IF (MATCHES GT 1) AND (NAM NE 'HISTORY ') AND               $
-                (NAM NE 'COMMENT ') AND (NAM NE '') THEN        $
-                MESSAGE,/INFORMATIONAL, 'WARNING- Keyword ' +   $
-                NAM + 'located more than once in ' + ABORT
+            IF (MATCHES GT 1) THEN BEGIN
+                IF KEYWORD_SET(MULTIVALUE) THEN BEGIN
+                    VECTOR = 1
+                    NUMBER = INDGEN(MATCHES) + 1
+                END ELSE IF (NAM NE 'HISTORY ') AND (NAM NE 'COMMENT ') $
+                  AND (NAM NE '') THEN BEGIN
+                    MESSAGE, /INFORMATIONAL, 'WARNING- Keyword ' +   $
+                             NAM + 'located more than once in ' + ABORT
+                ENDIF
+            ENDIF
             IF (MATCHES GT 0) THEN START = NFOUND[MATCHES-1]
         ENDELSE
 ;
@@ -302,6 +317,7 @@
                     NEXT_CHAR = 0
                     OFF = 0
                     VALUE = ''
+                    COMMENT = ''
 ;
 ;  Find the next apostrophe.
 ;
@@ -324,35 +340,30 @@ NEXT_APOST:
 ;  Extract the comment, if any.
 ;
                     SLASH = STRPOS(TEST, "/", ENDAP)
-                    IF SLASH LT 0 THEN COMMENT = '' ELSE        $
-                        COMMENT = STRMID(TEST, SLASH+1, STRLEN(TEST)-SLASH-1)
-
+                    IF SLASH GE 0 THEN COMMENT += STRMID(TEST, SLASH+1, STRLEN(TEST)-SLASH-1)
 ;
-; CM 19 Sep 1997
+; CM 19 Sep 1997 -- Modified 12-Apr-2021 WTT
 ; This is a string that could be continued on the next line.  Check this
-; possibility with the following four criteria: *1) Ends with '&'
-; (2) Next line is CONTINUE  (3) LONGSTRN keyword is present (recursive call to
-;  FXPAR) 4. /NOCONTINE is not set
+; possibility with the following three criteria: (1) Ends with '&'
+; (2) Next line is CONTINUE  (3) /NOCONTINUE is not set
 
-    IF NOT KEYWORD_SET(NOCONTINUE) THEN BEGIN
-                    OFF = OFF + 1
-                    VAL = STRTRIM(VALUE,2)
+                    IF NOT KEYWORD_SET(NOCONTINUE) THEN BEGIN
+                        OFF = OFF + 1
+                        VAL = STRTRIM(VALUE,2)
 
-                    IF (STRLEN(VAL) GT 0) AND $
-                      (STRMID(VAL, STRLEN(VAL)-1, 1) EQ '&') AND $
-                      (STRMID(HDR[NFOUND[I]+OFF],0,8) EQ 'CONTINUE') THEN BEGIN
-                       IF (SIZE(FXPAR(HDR, 'LONGSTRN',/NOCONTINUE)))[1] EQ 7 THEN BEGIN                    
-                      VALUE = STRMID(VAL, 0, STRLEN(VAL)-1)
-                      TEST = HDR[NFOUND[I]+OFF]
-                      TEST = STRMID(TEST, 8, STRLEN(TEST)-8)
-                      TEST = STRTRIM(TEST, 2)
-                      IF STRMID(TEST, 0, 1) NE "'" THEN MESSAGE, $
-                        'ERROR: Invalidly CONTINUEd string in '+ABORT
-                      NEXT_CHAR = 1
-                      GOTO, NEXT_APOST
+                        IF (STRLEN(VAL) GT 0) AND $
+                          (STRMID(VAL, STRLEN(VAL)-1, 1) EQ '&') AND $
+                          (STRMID(HDR[NFOUND[I]+OFF],0,8) EQ 'CONTINUE') THEN BEGIN
+                            VALUE = STRMID(VAL, 0, STRLEN(VAL)-1)
+                            TEST = HDR[NFOUND[I]+OFF]
+                            TEST = STRMID(TEST, 8, STRLEN(TEST)-8)
+                            TEST = STRTRIM(TEST, 2)
+                            IF STRMID(TEST, 0, 1) NE "'" THEN MESSAGE, $
+                              'ERROR: Invalidly CONTINUEd string in '+ABORT
+                            NEXT_CHAR = 1
+                            GOTO, NEXT_APOST
+                        ENDIF
                     ENDIF
-                   ENDIF
-    ENDIF
 
 ;
 ;  If not a string, then separate the parameter field from the comment field.

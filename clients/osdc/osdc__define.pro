@@ -100,11 +100,13 @@
 ;              worked before! I.e. nobody has tried to download it (or at
 ;              least they haven't complained it not working. It does work now.
 ;
-; Version     : 5 Nov 2013
+; 7 Feb 2020: Add quiet option
+;
 ;-
-FUNCTION osdc::init,user,pass,server=server,fileserver=fileserv
+FUNCTION osdc::init,user,pass,server=server,fileserver=fileserv,quiet=quiet
   default,user,''
   default,pass,''
+  default,quiet,0
   
   IF NOT keyword_set(server) THEN server = getenv("OSDC_DB")
   IF NOT keyword_set(server) THEN server = 'sdc.uio.no'
@@ -112,20 +114,20 @@ FUNCTION osdc::init,user,pass,server=server,fileserver=fileserv
   IF NOT keyword_set(fileserv) THEN fileserv = getenv("OSDC_FS")
   IF NOT keyword_set(fileserv) THEN fileserv = server
 
-  self.db_conn = obj_new('osdc_http',server=server)
-  self.fs_conn = self.db_conn
+  self.db_conn = obj_new('osdc_http',server=server,quiet=quiet)
   
-  IF fileserv NE server THEN  self.fs_conn = obj_new('osdc_http',server=server)
+  IF fileserv EQ server THEN self.fs_conn = self.db_conn $
+  ELSE self.fs_conn = obj_new('osdc_http',server=fileserv)
 
   self.show = ptr_new(/allocate)
   self.cond = ptr_new(/allocate)
   
   self->limit,1000
   self->page,1
+  self->quiet,quiet
   self->show,"FILE,INSTRUME,DATE_OBS,DATEPATH,SUBPATH,HOURPATH"
   self->order,'DATE_OBS',/ascending
   self->authorise,user,pass
-
   return,1
 END
 
@@ -141,6 +143,10 @@ END
 
 PRO osdc::page,n
   self.page = n
+END
+
+PRO osdc::quiet,quiet
+  self.quiet = quiet
 END
 
 PRO osdc::show,list,add=add
@@ -162,7 +168,9 @@ PRO osdc::show,list,add=add
   FOR i=0,n_elements(musthave)-1 DO $
      IF total(list EQ musthave[i]) EQ 0 THEN add = [add,musthave[i]]
   IF n_elements(add) GT 1 THEN BEGIN
-     print,"Adding fields to allow path calculation: ",strjoin(add[1:*],',')
+     IF NOT self.quiet THEN BEGIN
+        print,"Adding fields to allow path calculation: ",strjoin(add[1:*],',')
+     END
      list = [list,add[1:*]]
   END
   mask = bytarr(n_elements(list))
@@ -411,7 +419,7 @@ PRO osdc::search,out
   ; used to do, so it has to be built into the query
   ;
   query = 'http://'+server+'/'+query
-  print,query
+  IF NOT self.quiet THEN print,query
   self.db_conn->list,query,out,info=info
   self.db_conn->parse,out
   self.valid = 1
@@ -470,8 +478,11 @@ PRO osdc::ensure_files,paths,unzip=unzip
      file = strmid(path,strpos(path,'/',/reverse_search)+1,1000)
      self->ensure_dir,dir
      rpath = strmid(path,ntop+1,1000)
-     print,"Fetching "+path,form='(a,$)'
-     self.fs_conn->copy,url_first_part+rpath,path,info=info,err=err
+     
+     url = url_first_part+rpath
+     print,"Fetching "+path+" ...",format='(A,$)'
+     
+     self.fs_conn->copy,url,path,info=info,err=err
      print," .. and done"
      IF err NE '' THEN message,err
   END
@@ -624,6 +635,7 @@ pro osdc__define
   LONG = 0L
   dummy = $
      {OSDC,$
+      quiet: int,$
       reality:INT,$
       valid:INT,$
       db_conn:OBJ,$

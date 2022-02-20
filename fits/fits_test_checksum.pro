@@ -1,4 +1,5 @@
- function fits_test_checksum,hdr, data, ERRMSG = errmsg,FROM_IEEE=from_ieee
+ function fits_test_checksum,hdr, data, ERRMSG = errmsg,FROM_IEEE=from_ieee $
+                                , TRUST_DATASUM = trust_datasum
 ;+
 ; NAME:
 ;    FITS_TEST_CHECKSUM()
@@ -13,7 +14,8 @@
 ; INPUTS:
 ;    HDR - FITS header (vector string)
 ; OPTIONAL DATA:
-;    DATA - data array associated with the FITS header.   If not supplied, or
+;    DATA - data array associated with the FITS header.   An IDL structure is 
+;           not allowed.    If not supplied, or
 ;           set to a scalar, then there is assumed to be no data array 
 ;           associated with the FITS header.
 ; RESULT:
@@ -27,6 +29,11 @@
 ;             big endian format (e.g. an untranslated FITS array).    This 
 ;             keyword only has an effect on little endian machines (e.g. 
 ;             a Linux box).
+;    /TRUST_DATASUM - If this keyword is set, then the DATA input
+;             parameter is ignored and the DATASUM keyword in the HDR
+;             is assumed to be correct. (If there is no DATASUM
+;             keyword, /TRUST_DATASUM has no effect.)    Useful if data is too
+;             large to store entirely in memory at one time.
 ; OPTIONAL OUTPUT KEYWORD:
 ;     ERRMSG - will contain a scalar string giving the error condition.   If
 ;              RESULT = 1 then ERRMSG will be an empty string.   If this 
@@ -52,6 +59,7 @@
 ;     W. Landsman  SSAI               December 2002
 ;     Return quietly if CHECKSUM keywords not found W. Landsman May 2003
 ;     Add /NOSAVE to CHECKSUM32 calls when possible W. Landsman Sep 2004
+;     New option /TRUST_DATASUM. Mats Löfdahl July 2020
 ;-
   On_error,2 
   compile_opt idl2 
@@ -78,8 +86,11 @@
   if remain  NE 0 then $
        bhdr = [reform(bhdr,N_elements(bhdr)), replicate(32b, 2880 - remain) ]
   checksum32,bhdr, hsum, FROM_IEEE = from_ieee, /NOSAVE
-  Ndata = N_elements(data)
-  if Ndata GT 1 then begin 
+  if keyword_set(trust_datasum) && N_datasum gt 0 then begin
+     checksum32, [ulong(datasum), hsum], hdusum, /NOSAVE
+  endif else begin
+     Ndata = N_elements(data)
+     if Ndata GT 1 then begin 
            checksum32, data, dsum, FROM_IEEE= from_ieee
            remain = Ndata mod 2880
            if remain GT 0 then begin
@@ -95,7 +106,8 @@
                            ' FITS header value: ' + datasum
                   if printerr then message,/Con, errmsg 
            endif
-  endif else hdusum = hsum
+     endif else hdusum = hsum
+  endelse
 
   csum = FITS_ASCII_ENCODE(not hdusum)
   if csum NE '0000000000000000' then begin

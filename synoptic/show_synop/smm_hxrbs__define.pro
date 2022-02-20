@@ -13,6 +13,7 @@
 ; 
 ; Modifications:
 ;  14-Jul-2015, Kim.  Changed org from 'none' to 'year' after reorganizing files into yearly directories
+;  22_aug-2020, Kim. added https:// to rhost definition for older versions of IDL
 ;
 ;
 ;-
@@ -21,7 +22,7 @@
 function smm_hxrbs::init,_ref_extra=extra
 
 if ~self->synop_spex::init() then return,0
-rhost='hesperia.gsfc.nasa.gov'
+rhost='https://hesperia.gsfc.nasa.gov'
 self->setprop,rhost=rhost,ext='.fits',org='year',$
                  topdir='/smm/hxrbs',/full,/round
 

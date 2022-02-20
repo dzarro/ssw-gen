@@ -51,15 +51,18 @@
 ;               - added NO_CACHE keyword
 ;               28-May-2018, Zarro (ADNET)
 ;               - fixed potential keyword inheritence bug with PASSIVE
+;               11-Nov-2018, Zarro (ADNET)
+;               - added username/password support
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
 
 function idlneturl2::init,url,_extra=extra,debug=debug,passive=passive,$
-                     no_proxy=no_proxy,verbose=verbose,no_cache=no_cache
+                     no_proxy=no_proxy,verbose=verbose,no_cache=no_cache,$
+                     username=username,password=password
 
 
-ok=self->idlneturl::init(_extra=extra)
+ok=self->idlneturl::init(_extra=extra,url_username=username,url_password=password)
 if ~ok then return,0
 
 ;-- enable proxy

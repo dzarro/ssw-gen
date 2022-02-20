@@ -8,7 +8,9 @@ pro ssw_upgrade, _extra=_extra, site=site, $
 		 local_sets=local_sets, remote_sets=remote_sets, $
 		 debug=debug, spawnit=spawnit, $
                  loud=loud, verbose=verbose, result=result, $
-                 user=user, group=group, mirror=mirror, local_mirror=local_mirror
+                 user=user, group=group, mirror=mirror, local_mirror=local_mirror, $
+                 wget=wget, lmsal=lmsal, clean_wget=clean_wget, noclean_wget=noclean_wget,$
+                 cmds_wget=cmds_wget, remote_urls=remote_urls, local_paths=local_paths
 ;+
 ; Name: ssw_upgrade
 ;
@@ -35,6 +37,19 @@ pro ssw_upgrade, _extra=_extra, site=site, $
 ;   update_log - (switch) - if set, update $SSW/site/logs/ssw_upgrade_xxx.log
 ;   passive_ftp - (switch) - if set, tell make_mirror to use passive_ftp
 ;                            (alternately, via $ssw_passive_ftp env) 
+;   wget - use wget in place of heritage ftp/Mirror
+;          if switch: check for distributed OS/Arch binary - if none, use local default wget in path
+;          if existing file name, used that explicit wget binary
+;   lmsal - if set, use lmsal $SSW http (allows older wget versions, but possibly some hours stale 
+;           for non-lmsal mastered branches) - provides alternate parent using 'http' instead of (nascom) 'https'
+;           so allows use of older wget versions - pending filling out the wget +V1.18/ssl matrix in distribution.V
+;   clean_wget (switch) - if set, inhibit or remove the wget 'index.html<crap>' - probably the default
+;   noclean_wget (switch) - if set, leave the 'index.html<crap>' post wget - maybe used later for client side removes(tbd) and Then removed
+;   cmds_wget (output) - vector of wget commands (either spawned or not) - if wget set, but spawn not, can verify prior to /spawn call...
+;   remote_urls (output) - implied urls@SSW host (wget source)
+;   local_paths (output) - implies local paths (1:1) remote_urls - wget destination, relative to $SSW
+;
+;   
 ; Calling Examples:
 ;   ssw_upgrade,/eit,/sxt,/spawn  - update specified instrument trees (and required GENs)
 ;   ssw_upgrade,/eit,/sxt         - generate same package but dont spawn mirror job
@@ -42,7 +57,10 @@ pro ssw_upgrade, _extra=_extra, site=site, $
 ;   ssw_upgrade,/site,/spawn      - same but update SITE (! warning)
 ;   ssw_upgrade, remote=remote, local=local,/nospawn, /nopackage - just return paths
 ;   ssw_upgrade, /eit, mirror='$SSW/packages/mirror/mirror' ; use specified 
-;                                                           ; mirror
+;   ---- wget options when ftp@nascom plugged pulled (becomes default on that day);                                                           ; mirror
+;   ssw_upgrade,/wispr,/chianti,/pfss,/wget,/spawn,/loud    ; use wget in place of heritage ftp/Mirror
+;                                                           ; ('cause they made me..)
+;   ssw_upgrade,/iris,/stix,/eis,wget='/my/path/wget',/spawn
 ;
 ; History:
 ;    1-Dec-1996 - Written by Samuel Freeland   
@@ -80,15 +98,27 @@ pro ssw_upgrade, _extra=_extra, site=site, $
 ;    9-sep-2012 - S.L.Freeland - oops, finally onlined 'sdo' -> multi mission
 ;   14-feb-2013 - S.L.Freeland - protection for 'gen' only (Windows hiccup)
 ;    4-aug-2017 - S.L.Freeland	- psp hooks (Parker Solar Probe) + gen-only
+;   17-jul-2019 - S.L.Freeland - add the WGET hooks 
+;                                glue ssw_upgrade -> ssw_upgrade_mirror2get -> ssw_wget_mirror(2)2
+;   25-jul-2019 - S.L.Freeland - pass loud -> ssw_wget_mirror2 ( omit default --nv flag in wget commands)
+;    8-aug-2019 - W.T.Thompson - Make wget the default.  Add package/binaries by default.
+;   15-Apr-2020 - W.T.Thompson - Copy over LICENSE file
 ;
 ; Restrictions:
 ;   For now, all local in terms of local $SSW (no split instrument trees)
 ;   Assume SolarSoft, Perl and Mirror must be installed on local machine (if /SPAWN)
 ;-
+;
+if n_elements(wget) eq 0 then wget=1 ;Make wget the default
 debug=keyword_set(debug)
-spawnit=keyword_set(spawnit)               ; 17-Januaray-1997 DEFAULT = /NOSPAWN
+spawnit=keyword_set(spawnit)               ; 17-January-1997 DEFAULT = /NOSPAWN
 loud=keyword_set(loud) or keyword_set(verbose)
+wget_spawnit = keyword_set(spawnit) and keyword_set(wget)
 
+if wget_spawnit then begin 
+   box_message,'using WGET w/spawn - so inhibiting Mirror spawn!'
+   spawnit=0
+endif
 if n_elements(group) eq 0 then group=get_group()
 if n_elements(user) eq 0 then user=get_user()
 
@@ -128,7 +158,7 @@ missions=str2arr(get_logenv('SSW_MISSIONS'),' ')
 for i=0,n_elements(missions)-1 do set_logenv,missions(i),'',/quiet
 
 ss=where_arr(allinstr,instr, count)                       ; map local->remote
-gensets=['gen']                                           ; implied GEN trees
+gensets=['gen',concat_dir('packages','binaries')]         ; implied GEN trees
 
 if count gt 0 then begin
    sss=where(allmiss(ss) eq allinstr(ss),smcnt)           ; mission=instrument?
@@ -269,7 +299,30 @@ if spawnit then begin
    if loud then spawn,mircmd else spawn,mircmd,result
    if n_elements(dirtemp) gt 0 then cd,dirtemp           ; if run in-situ, recover 
 endif  
-
+if keyword_set(wget) then begin 
+   box_message,'wget requested'
+   dist_wget=ssw_bin_path('wget'+(['','.exe'])(os_family() eq 'Windows'),found=bin_found)
+   case 1 of 
+      file_exist(wget) : wget_cmd=wget ; using user input wget/path
+      bin_found: wget_cmd=dist_wget
+      else: wget_cmd='wget'
+   endcase
+;  map mirror file remote:local -> wget urls:local
+   ssw_upgrade_mirror2wget,rem,loc,lmsal=lmsal
+   remote_urls=rem
+   local_paths=loc
+   clean=1-keyword_set(noclean_wget) ; default cleansup wget mess...
+   cmds_wget=ssw_wget_mirror2(rem,loc,spawn=wget_spawnit, clean=clean,wget_cmd=wget_cmd,loud=loud)
+endif
+;
+;  Copy over the SolarSoft LICENSE file
+;
+if (keyword_set(spawnit) or keyword_set(wget_spawnit)) and $
+        (!version.release ge '8.3') then begin
+    license_file = 'https://' + ssw_host + '/solarsoft/LICENSE'
+    sock_copy, license_file, 'LICENSE', out_dir=ssw_parent
+endif
+;
 if debug then stop
 return
 end

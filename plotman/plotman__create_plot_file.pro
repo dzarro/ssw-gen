@@ -55,7 +55,9 @@
 ;   alone.)  Also, order was deprecated in write_tiff command, so use reverse and default orientation of 1.
 ; Kim,10-Feb-2016. Non-color jpegs, tiffs and pngs didn't work.  Use tvrd(true=0) for them.  Also when error handler
 ;   caught error in writing jpeg, set_plot had already been called to set back to user's device, but then call to 
-;   set decomp to saved value for Z device, left user's device in decomposed mode! 
+;   set decomp to saved value for Z device, left user's device in decomposed mode!
+; Kim,08-Oct-2020, For TIFF, change xresol and yresol to 6. times what they were - files don't look that different
+;   from old res when viewed in actual size, but when shrunk look better.
 ;   
 ;-
 
@@ -295,10 +297,10 @@ CASE 1 OF
 
       IF config.color EQ 1 THEN $
          WRITE_TIFF, config.filename, reverse(thisImage,3), orientation=1, $
-            RED=r, GREEN=g, BLUE=b, XRESOL=ROUND(!D.X_PX_CM * 2.54), $
-            YRESOL=ROUND(!D.X_PX_CM * 2.54) ELSE $
+            RED=r, GREEN=g, BLUE=b, XRESOL=ROUND(!D.X_PX_CM * 2.54)*6., $
+            YRESOL=ROUND(!D.X_PX_CM * 2.54)*6. ELSE $
          WRITE_TIFF, config.filename, rotate(reverse(thisImage),2), orientation=1, $
-            XRESOL=ROUND(!D.X_PX_CM * 2.54), YRESOL=ROUND(!D.X_PX_CM * 2.54)
+            XRESOL=ROUND(!D.X_PX_CM * 2.54)*6., YRESOL=ROUND(!D.X_PX_CM * 2.54)*6.
       END
 
    jpeg: BEGIN

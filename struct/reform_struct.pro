@@ -25,12 +25,13 @@
 ;               IDL> help,out
 ;               OUT    STRUCT    = -> <Anonymous> Array[100]
 ;
-; Restrictions: Al tags in input structure that will be included in output structure
+; Restrictions: All tags in input structure that will be included in output structure
 ;   must be singly dimensioned.
 ;
 ; History: Written by R.Schwartz as a method in hsi_spectrogram. Extracted
 ;   to a standalone function and documented by K. Tolbert, 13-Nov-2008
-;
+;  14-dec-2018, R.Schwartz, make call to have_tag /exact so it only
+;  operates on a single tag/field
 ;-
 
 function reform_struct, var, tag, error=error
@@ -41,7 +42,7 @@ function reform_struct, var, tag, error=error
     tags = tag_names( var )
     ; dimension of 'tag' tag will determine dimension of output struct
     default, tag, tags[0]
-    test = have_tag( var, tag, i)
+    test = have_tag( var, tag, i, /exact)
     if not test then begin
        message,/continue,tag + ' not found'
 

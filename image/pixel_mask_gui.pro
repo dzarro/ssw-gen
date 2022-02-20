@@ -25,7 +25,19 @@
 ;             not necessary if MAP has been created with EIS_MAKE_IMAGE.
 ;      Wvl:   The wavelength for which the image was created. Note
 ;             that this input is not necessary if MAP has been created
-;             with EIS_MAKE_IMAGE. 
+;             with EIS_MAKE_IMAGE.
+;      Mask:  A mask structure created from a previous call to
+;             PIXEL_MASK_GUI. Must have the same size images as the
+;             input MAP.
+;      Dx:    Specify the X-pixel size of the input image (not needed
+;             if a map structure was input).
+;      Dy:    Specify the Y-pixel size of the input image (not needed
+;             if a map structure was input).
+;      Yshift: If MASK has been input, then this keyword shifts the
+;              mask pixels in the Y-direction. For example, setting
+;              yshift=+100 will move the mask pixels upwards by 100
+;              pixels. You may "lose" pixels when doing this, and a
+;              warning will be printed to the screen.
 ;
 ; OUTPUTS:
 ;      The routine will return a 2D byte array containing 0's and 1's,
@@ -93,6 +105,10 @@
 ;        Modified so that it works on any 2D image or map.
 ;      Ver.3, 28-Jun-2017, Peter Young
 ;        Final adjustments to output and header.
+;      Ver.4, 21-Aug-2019, Peter Young
+;        Added MASK= optional input.
+;      Ver.5, 29-Jan-2020, Peter Young
+;        Added YSHIFT= keyword.
 ;-
 
 
@@ -704,7 +720,7 @@ wid_data.im_id=image_id
 state.wid_data=wid_data
 widget_control,pixmask_base,set_uvalue=state
 
-pixmask_plot_image, state
+pixmask_plot_image, state, /oplot
 
 XMANAGER, 'pixmask_base', pixmask_base, group=group
 
@@ -713,16 +729,19 @@ END
 
 
 ;----------------------
-FUNCTION pixel_mask_gui, map, slit=slit, wvl=wvl, dx=dx, dy=dy
+FUNCTION pixel_mask_gui, map, slit=slit, wvl=wvl, dx=dx, dy=dy, mask=mask, $
+                         yshift=yshift
 
 
 IF n_params() LT 1 THEN BEGIN
-  print,'Use:  IDL> mask=pixel_mask_gui(map [, slit=, wvl=, dx=, dy=])'
+  print,'Use:  IDL> mask=pixel_mask_gui(map [, slit=, wvl=, dx=, dy=, yshift= ])'
   print,'   map -  either a 2D image, or an IDL map structure'
   print,'   slit - only relevant for Hinode/EIS data; should be 1 or 2'
   print,'   wvl  - only relevant for Hinode/EIS data'
   print,'   dx   - X-scale for image'
   print,'   dy   - Y-scale for image'
+  print,'   mask - Input a previously-created mask to use as starting point.'
+  print,'   yshift - Y-pixel shift to apply to the input mask.'
   return,-1
 ENDIF 
 
@@ -769,8 +788,44 @@ ENDIF ELSE BEGIN
   IF tag_exist(map,'wvl') THEN wvl=map.wvl
 ENDELSE 
 
+;
+; Check if MASK has been input and make sure it has the right format.
+; 
+IF n_elements(mask) NE 0 THEN BEGIN
+  s=size(mask.image,/dim)
+  IF s[0] NE nx OR s[1] NE ny THEN BEGIN
+    print,'% PIXEL_MASK_GUI: the dimensions of the input MASK image do not match those of the image. Returning...'
+    return,-1
+  ENDIF
+  IF min(mask.image) LT 0 OR max(mask.image) GT 1 THEN BEGIN
+    print,"% PIXEL_MASK_GUI: the input MASK image must contain only 0's AND 1's. Returning..."
+    return,-1
+  ENDIF
+  mask_image=mask.image
+ ;
+ ; Performs a Y-shift of the input pixel mask.
+ ;
+  IF n_elements(yshift) NE 0 THEN BEGIN
+    IF abs(yshift) lt ny THEN BEGIN 
+      im=bytarr(nx,ny)
+      IF yshift GE 0 THEN BEGIN
+        im[*,yshift:*]=mask_image[*,0:(ny-yshift-1)]
+      ENDIF ELSE BEGIN
+        im[*,0:(ny+yshift-1)]=mask_image[*,-yshift:*]
+      ENDELSE
+      chck=where(im EQ 1,n1)
+      chck=where(mask_image EQ 1,n2)
+      IF n1 NE n2 THEN BEGIN
+        print,'% PIXEL_MASK_GUI: Warning - the shifted mask has less pixels than the original mask.'
+      ENDIF 
+      mask_image=im
+    ENDIF 
+  ENDIF 
+ENDIF ELSE BEGIN
+  mask_image=bytarr(nx,ny)
+ENDELSE 
 
-mask=bytarr(nx,ny)
+
 IF n_elements(wvl) EQ 0 THEN wvl=-1.
 IF n_elements(slit) EQ 0 THEN slit=-1
 
@@ -784,7 +839,7 @@ IF wvl NE -1 AND slit NE -1 THEN eis_swtch=1 ELSE eis_swtch=0
 ; This structure contains information about the image that is passed
 ; to the GUI.
 ;
-data={image: image, slit: round(slit), wvl: wvl, mask: mask, nx: nx, ny: ny, $
+data={image: image, slit: round(slit), wvl: wvl, mask: mask_image, nx: nx, ny: ny, $
       dx: dx, dy: dy}
 
 

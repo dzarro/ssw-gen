@@ -7,24 +7,27 @@
 ;
 ; Category    : utility system sockets
 ;
-; Syntax      : IDL> links=parse_links(listing,file,path=path)
+; Syntax      : IDL> links=parse_links(listing,file,path)
 ;                   
 ; Inputs      : LISTING = output listing of remote directory
-;               FILE = remote file name or pattern to search (optional) 
+;               FILE = remote file name or pattern to search 
+;               PATH = optional path name to remove from links
 ;
 ; Outputs     : Matched results
 ;
 ; Keywords    : COUNT = # of matches
+;               IMAGES = return IMG/SRC links instead of HREF
 ;
 ; History     : 7-Mar-2015, Zarro (ADNET) - Written
+;               3-Mar-2019, Zarro (ADNET) - added IMAGES
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
 
-function parse_links,listing,file,path,count=count
+function parse_links,listing,file,path,count=count,images=images
 
  count=0
-
+ img=keyword_set(images)
  if is_blank(listing) then return,''
  if is_string(file) then dfile=file else dfile='*'
 
@@ -34,7 +37,8 @@ function parse_links,listing,file,path,count=count
  ireg=dfile+anyc
 
  if dfile eq anyc then ireg=anyc
- regex='href *= *"?('+ireg+') *"?.*>'
+ if img then item='src' else item='href'
+ regex=item+' *= *"?('+ireg+') *"?.*>'
 
  dprint,'% Regex ',regex
 

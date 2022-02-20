@@ -14,23 +14,19 @@
 ; Outputs     : OUTPUT = 1/0
 ;
 ; History     : 11-August-2017 Zarro (ADNET) - written
+;                8-October-2019, Zarro (ADNET)
+;                 -added check for vector input
+;                22-November-2020, Zarro (ADNET)
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
 
 function is_hash,input
 
-error=0
-catch, error
-if (error ne 0) then begin
- catch,/cancel
- message,/reset
- return,0b
-endif
+if ~is_object(input) then return,0b
 
-stc=input->ToStruct()
-
-return,1b
-
+chk=strupcase(obj_class(input)) 
+return, (chk eq 'HASH') || (chk eq 'ORDEREDHASH')
 end
- 
+
+

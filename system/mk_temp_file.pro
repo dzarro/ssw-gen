@@ -21,6 +21,7 @@
 ;
 ; History     : Version 1,  25-May-1997,  D.M. Zarro.  Written
 ;               17 April 2000, Zarro (SM&A/GSFC) - added DIREC keyword
+;               8-June-2019, Zarro (ADNET) - add /TIME to GET_RID
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
@@ -29,7 +30,7 @@ function mk_temp_file,file,path=path,random=random,directory=directory
 
 if is_blank(file) then file='temp.dat'
 
-break_file,file(0),fdsk,fdir,fname,fext
+break_file,file[0],fdsk,fdir,fname,fext
 
 fpath=trim(fdsk+fdir)
 
@@ -54,7 +55,7 @@ endif else rfile=name
 
 if keyword_set(random) then begin
  break_file,rfile,rdsk,rdir,rname,rext
- rid='r'+get_rid()
+ rid='r'+get_rid(/time)
  rfile=concat_dir(rdsk+rdir,rid+rname+rext)
 endif
 

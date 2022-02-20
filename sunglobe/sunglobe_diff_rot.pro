@@ -25,20 +25,35 @@
 ; Outputs     :	The heliographic map with alpha channel for the selected image
 ;               is updated in the SSTATE structure.
 ;
+; Keywords    : CONNFILE = If set, then apply rotation to Magnetic Connectivity
+;                          Tool image.
+;
+;               FOVPAINT = If set, then apply rotation to painted FOV
+;
 ; Calls       :	ANYTIM2TAI, UTC2TAI, DIFF_ROT
 ;
 ; History     :	Version 1, 7-Jan-2016, William Thompson, GSFC
 ;               Version 2, 20-Mar-2018, WTT, correct bug where derotation was
 ;                       not being applied.
+;               Version 3, 10-Apr-2019, WTT, add /CONNFILE keyword
+;               Version 4, 17-Aug-2021, WTT, add /FOVPAINT keyword
 ;
 ; Contact     :	WTHOMPSON
 ;-
 ;
-pro sunglobe_diff_rot, sstate, index
+pro sunglobe_diff_rot, sstate, index, connfile=connfile, fovpaint=fovpaint
+;
+;  Select the image to be processed.
+;
+if keyword_set(connfile) then begin
+   ptr = sstate.pconnfile
+end else if keyword_set(fovpaint) then begin
+   ptr = sstate.pfovpaint
+end else ptr = sstate.pimagestates[index]
 ;
 ;  From the map size, determine the spacing in longitude and latitude.
 ;
-sz = size((*sstate.pimagestates[index]).map)
+sz = size((*ptr).map)
 nx = sz[2]
 ny = sz[3]
 dlon = (360.0 / nx)
@@ -52,7 +67,11 @@ lat = (jj + 0.5) * dlat - 90
 ;  Determine the number of days between the observation and the target date.
 ;
 target_date = sstate.target_date
-image_date = (*sstate.pimagestates[index]).wcs.time.observ_date
+if keyword_set(connfile) then begin
+   image_date = (*sstate.pconnfile).date
+end else if keyword_set(fovpaint) then begin
+   image_date = (*sstate.pfovpaint).date
+end else image_date = (*ptr).wcs.time.observ_date
 ndays = (anytim2tai(target_date) - utc2tai(image_date)) / 86400
 ;
 ;  Determine the amount of rotation in pixels as a function of latitude.
@@ -69,19 +88,17 @@ jj = rebin( reform(jj,1,ny), nx, ny)
 ;
 ;  Apply the differential rotation to the map, and store it in the plot object.
 ;
-(*sstate.pimagestates[index]).omap_alpha->getproperty, data=map_out
+(*ptr).omap_alpha->getproperty, data=map_out
 for k=0,2 do begin
-    temp = (reform(((*sstate.pimagestates[index]).map)[k,*,*]))[ii,jj]
+    temp = (reform(((*ptr).map)[k,*,*]))[ii,jj]
     temp = reform(temp, 1, nx, ny, /overwrite)
-    (*sstate.pimagestates[index]).map_rot[k,*,*] = temp
-    (*sstate.pimagestates[index]).map_alpha[k,*,*] = temp
+    (*ptr).map_rot[k,*,*] = temp
+    (*ptr).map_alpha[k,*,*] = temp
 endfor
-temp = ((*sstate.pimagestates[index]).mapmask)[ii,jj]
+temp = ((*ptr).mapmask)[ii,jj]
 temp = reform(temp, 1, nx, ny, /overwrite)
-(*sstate.pimagestates[index]).mapmask_rot = temp
-(*sstate.pimagestates[index]).map_alpha[3,*,*] = temp * $
-  (*sstate.pimagestates[index]).opacity
-(*sstate.pimagestates[index]).omap_alpha->setproperty, $
-  data=(*sstate.pimagestates[index]).map_alpha
+(*ptr).mapmask_rot = temp
+(*ptr).map_alpha[3,*,*] = temp * (*ptr).opacity
+(*ptr).omap_alpha->setproperty, data=(*ptr).map_alpha
 ;
 end

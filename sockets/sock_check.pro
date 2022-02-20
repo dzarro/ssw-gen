@@ -25,29 +25,30 @@
 ;               2-February-2017, Zarro (ADNET)
 ;                - added RESPONSE_CODE
 ;               10-March-2017, Zarro (ADNET)
-;                - added fall-back to old SOCK_RESPONSE for non-secure queries
+;                - added fall-back to old SOCK_RESPONSE for non-secure
+;                  queries
+;               18-January-2019, Zarro (ADNET)
+;                - absorbed ERR and RESPONSE strings in _REF_EXTRA
+;                7-March-2019, Zarro (ADNET)
+;                - deprecated old SOCK_RESPONSE
+;                4-October-2019, Zarro (ADNET)
+;                - improved error propagation via keyword inheritance
+;                5-November-2019, Zarro (ADNET)
+;                - added check for redirect
 ;-
 
-function sock_check,url,code=code,response_code=response_code,_ref_extra=extra,err=err
+function sock_check,url,_ref_extra=extra,code=code,location=location
 
-err=''
-response_code=42
-code=404L
-if ~is_url(url,secure=secure,query=query,_extra=extra) then return,0b
-if n_elements(url) gt 1 then begin
- err='Input URL must be scalar.'
- mprint,err
- return,0b
+location=''
+response=sock_head(url,_extra=extra,/scalar,code=code,location=location)
+
+if is_url(location) then begin
+ location=url_fix(location,_extra=extra)
+ response=sock_head(location,_extra=extra,/scalar,code=code)
 endif
-
-if ~secure && query then checker='sock_response' else checker='sock_head'
-response=call_function(checker,url,_extra=extra,code=code,err=err,response_code=response_code,$
- location=location)
-
 scode=strtrim(code,2)
-nok=stregex(scode,'^(4|5)',/bool) 
+nok=stregex(scode,'^(4|5|0)',/bool) 
 state=~nok
-
 return,state
 
 end

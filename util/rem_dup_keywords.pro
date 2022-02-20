@@ -21,7 +21,7 @@
 
 function rem_dup_keywords,extra
 
-if ~is_string(extra) and ~is_struct(extra) then return,extra
+if ~is_string(extra) && ~is_struct(extra) then return,extra
 
 if is_struct(extra) then textra=tag_names(extra) else textra=extra
 np=n_elements(textra)

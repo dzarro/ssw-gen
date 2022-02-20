@@ -52,6 +52,7 @@
 ;
 ; History     :	Version 1, 02-Sep-2016, William Thompson, GSFC
 ;               Version 2, 14-Nov-2016, WTT, fix bug when POBEFOREMODEL not defined
+;               Version 3, 10-Apr-2019, WTT, fix pointer free bug
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -102,7 +103,7 @@ self->idlgrmodel::setproperty, _extra=_extra
 ;
 rebuild = 0
 if datatype(sstate) eq 'STC' then begin
-    ptr_destroy, self.psstate
+    ptr_free, self.psstate
     self.psstate = ptr_new(sstate)
     rebuild = 1
 endif

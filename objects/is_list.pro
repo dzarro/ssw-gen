@@ -14,23 +14,19 @@
 ; Outputs     : OUTPUT = 1/0
 ;
 ; History     : 11-August-2017 Zarro (ADNET) - written
+;                8-October-2019, Zarro (ADNET) 
+;                 -added check for vector input
+;               11-November-2020, Zarro (ADNET)
+;                 - switched to checking OBJ_CLASS
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
 
 function is_list,input
 
-error=0
-catch, error
-if (error ne 0) then begin
- catch,/cancel
- message,/reset
- return,0b
-endif
+if ~is_object(input) then return,0b
 
-arr=input->ToArray()
-
-return,1b
+return,strupcase(obj_class(input)) eq 'LIST'
 
 end
  

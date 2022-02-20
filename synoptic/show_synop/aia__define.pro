@@ -36,6 +36,8 @@
 ;               14-Feb-2017, Zarro (ADNET) - added check for CROTA2
 ;               16-Mar-2017, Zarro (ADNET)
 ;               - added call to instrument-specific IDL_STARTUP
+;               24-July-2020, Zarro (ADNET)
+;               - add INDEX_REF keyword to AIA_PREP to align image to itself
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;- 
@@ -104,8 +106,9 @@ prepped=self->is_prepped(index)
 
 if ~no_prep && ~prepped && self->have_path(_extra=extra) then begin
  if ~have_tag(index,'crota2') then tindex=add_tag(index,0.,'crota2') else tindex=index
+
  aia_prep,tindex,data,oindex,odata,_extra=extra,/quiet,/use_ref,/nearest,$
-                       normalize=normalize
+                       normalize=normalize,index_ref=tindex
  data=temporary(odata)
  index=oindex
 endif

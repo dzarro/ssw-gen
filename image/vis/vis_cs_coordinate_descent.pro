@@ -12,6 +12,8 @@
 ;               29 Aug 2017, Roman Bolzern (FHNW)
 ;               - improved photometry by total flux hard constraint
 ;               - more consistent reconstruction times due to changed thresholding
+;               4 Oct 2019, Simon Felix (FHNW)
+;               - improved robustness for degenerate cases and added use of abort_numerical_issues param
 ;
 ; Contact     : simon.felix@fhnw.ch
 ;-
@@ -24,6 +26,7 @@ function vis_cs_coordinate_descent,$
   totalFlux, $
   sparseness, $
   verbose, $
+  abort_numerical_issues, $
   internalParams
 
   sigamp1 = vis.Sigamp ^ 0.5d
@@ -35,6 +38,9 @@ function vis_cs_coordinate_descent,$
 
   _vis = vis.obsvis / sigamp1
   coeff = vis_cs_gaussdict_transform(gDict, W, H, vis) ;coeff is flipped compared to C# 'cause IDL is column first
+  
+  ;coeff[where(coeff lt 1e-40)]=0 ;additional clipping for numerical stability
+  
   coeff = temporary(coeff) / (replicate(1d, n_elements(_vis))#(gDict.Amp)) ; divide each column by Amp
   coeff = temporary(coeff) / (sigamp1#replicate(1d, n_elements(gDict))); divide each row by sigamp1
 
@@ -77,7 +83,12 @@ function vis_cs_coordinate_descent,$
         coeff_bi = coeff_b[*, i]
         alpha = 1d / (atf - xi)
         epsilon = alpha * (transpose(sumsT) - coeff_bi * xi + _visdouble)
-        newx = ((2d * sumsT#(coeff_bi - epsilon) + (-lambda * alpha * (xsums - xi) + lambda)) / (cA[i] + transpose(epsilon)#(4*coeff_bi - 2*epsilon)) + xi)[0] > 0d < atf * .999d
+        divisor = cA[i] + transpose(epsilon)#(4*coeff_bi - 2*epsilon)
+        if (divisor eq 0d) || ((atf-xi) eq 0d) then begin
+          if (abort_numerical_issues eq 1) && (curSpI eq 7) then return, x*0 else newx = 0
+        endif else begin
+          newx = ((2d * sumsT#(coeff_bi - epsilon) + (-lambda * alpha * (xsums - xi) + lambda)) / (divisor) + xi)[0] > 0d < atf * .999d
+        endelse
         delta = newx - xi
         if (newx eq 0d xor xi eq 0d) || abs(delta) gt atf * 0.001  then begin
           if newx eq 0d && xi ne 0d then begin
@@ -112,7 +123,12 @@ function vis_cs_coordinate_descent,$
           coeff_bi = coeff_b[*, i]
           alpha = 1d / (atf - xi)
           epsilon = alpha * (transpose(sumsT) - coeff_bi * xi + _visdouble)
-          newx = ((2d * sumsT#(coeff_bi - epsilon) + (-lambda * alpha * (xsums - xi) + lambda)) / (cA[i] + transpose(epsilon)#(4*coeff_bi - 2*epsilon)) + xi)[0] > 0d < atf * .999d
+          divisor = cA[i] + transpose(epsilon)#(4*coeff_bi - 2*epsilon)
+          if (divisor eq 0d) || ((atf-xi) eq 0d) then begin
+            if (abort_numerical_issues eq 1) && (curSpI eq 7) then return, x*0 else newx = 0
+          endif else begin
+            newx = ((2d * sumsT#(coeff_bi - epsilon) + (-lambda * alpha * (xsums - xi) + lambda)) / (divisor) + xi)[0] > 0d < atf * .999d
+          endelse
           delta = newx - xi
           if (newx eq 0d xor xi eq 0d) || abs(delta) gt atf * 0.001  then begin
             if newx eq 0d && xi ne 0d then begin
@@ -125,6 +141,7 @@ function vis_cs_coordinate_descent,$
                 activeI_sum += 1
               endif
             endelse
+
             sumsT += delta * transpose(coeff_bi)
             sumsT -= delta * transpose(epsilon)
             x -= delta * alpha * x
@@ -143,7 +160,5 @@ function vis_cs_coordinate_descent,$
 
   ;if (total(activeI) eq 0.0) then stop ; descent didn't work
 
-  res = x / gDict.Amp
-
-  return, res
+  return, x / gDict.Amp
 end

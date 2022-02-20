@@ -39,6 +39,7 @@
 ;  23-Apr-2015, Kim. Use true color.  frames now dimensioned [3,nx,ny,nframes], use set_pixel_depth=24 on
 ;    'z' buffer, don't call saveimage (has bug) just call write_jpeg myself.  This change was forced after
 ;    something changed with the map images (suspect a change DMZ made to make true color images for Wei Liu).
+;  8-Nov-2019, Kim. In movie_frames, set decomposed=0 for panel plots - color of contours was wrong.
 ;    
 ;-
 
@@ -139,7 +140,7 @@ if nframe gt 1 then begin   ; More than 1 panel, movie over different panels
     panel = panels -> get_item(psel[ii])
     if panel_plot then begin
       set_plot,'Z'
-      device,set_resolution=[dim[0], dim[1]], set_pixel_depth=24      
+      device,set_resolution=[dim[0], dim[1]], set_pixel_depth=24, decomposed=0      
       self -> focus_panel, *panel, psel[ii]
       self -> plot, charsize=charsize
       frames[*,*,*,ii] = tvrd(/true)

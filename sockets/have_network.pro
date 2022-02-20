@@ -54,25 +54,31 @@
 ;               - really made USE_NETWORK the default
 ;               31-Jan-17, Zarro (ADNET)
 ;               - added RESPONSE_CODE
+;               7-Mar-2019, Zarro (ADNET)
+;               - deprecated old SOCK_RESPONSE
+;               4-October-2019, Zarro (ADNET)
+;               - improved error propagation via keyword inheritance
+;               27-November-2019, Zarro (ADNET)
+;               - added LOCATION keyword
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-    
 
 function have_network,url,verbose=verbose,err=err,_ref_extra=extra,$
-         interval=interval,reset=reset,use_network=use_network,code=code,$
-         response_code=response_code
+         interval=interval,reset=reset,code=code,$
+         response_code=response_code,location=location
 
 common have_network,urls
 
 err=''
 reset=keyword_set(reset)
 verbose=keyword_set(verbose)
-response_code=0L
 
 if reset then delvarx,urls
 if is_string(url) then test_url=strtrim(url,2) else test_url='www.google.com'
-purl=url_fix(test_url,_extra=extra)
-purl=url_parse(purl)
+
+test_url=url_fix(test_url,_extra=extra)
+purl=url_parse(test_url)
 test_host=purl.host
 test_port=purl.port
 test_scheme=purl.scheme
@@ -91,8 +97,9 @@ if is_struct(urls) then begin
   state=urls[j].state
   time=urls[j].time
   err=urls[j].err
-  code=urls[j].status_code
+  code=urls[j].code
   response_code=urls[j].response_code
+  location=urls[j].location
 
 ;-- return last state if last time less than interval
 
@@ -108,23 +115,10 @@ endif
 ;-- try to connect to url
 
 state=0b
-hfunct='sock_response'
-do_network=1b
-if is_number(use_network) then if use_network eq 0 then do_network=0b
-if since_version('6.4') && do_network then hfunct='sock_head'
-
-chk=call_function(hfunct,test_url,_extra=extra,err=err,code=code,location=location,$
+state=sock_check(test_url,_extra=extra,err=err,code=code,location=location,$
                    verbose=verbose,response_code=response_code)
 
-scode=strmid(strtrim(code,2),0,1)
-state=(scode ne '4') && (scode ne '5')
-
 ;-- if location is returned in header, then most likely a redirect
-
-if is_string(location) then begin
- state=1b
- err=''
-endif
 
 ;-- update this url
 
@@ -132,11 +126,12 @@ if count eq 1 then begin
  urls[j].state=state
  urls[j].time=systime(/seconds)
  urls[j].err=err
- urls[j].status_code=code
+ urls[j].code=code
  urls[j].response_code=response_code
+ urls[j].location=location
 endif else begin
  now=systime(/seconds)
- new_url={url:test_url,state:state,time:now,err:err,status_code:code,response_code:response_code}
+ new_url={url:test_url,location:location,state:state,time:now,err:err,code:code,response_code:response_code}
  urls=merge_struct(urls,new_url)
 endelse
 

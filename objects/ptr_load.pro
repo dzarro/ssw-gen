@@ -46,6 +46,8 @@
 ; MODIFICATION HISTORY:
 ;	4-mar-2011, richard.schwartz,
 ;	30-oct-2017, richard.schwartz, TAG_NAME added
+;	20-Feb-2020, Kim. Fixed bug - just checking if total number of valid ptrs matches nvalid_index isn't
+;	  enough - need to also check if the ones in 'valid' array are the ones that are valid in ptrs array.
 ;
 ;-
 pro ptr_load, ptrs, ptr_data, index, $
@@ -60,7 +62,8 @@ pro ptr_load, ptrs, ptr_data, index, $
     return
   endif
 
-  if (ftotal( ptr_valid(ptrs)) ) ne ( nvalid_index ) then begin
+  ; 20-Feb-2020, Kim - changed test (ftotal( ptr_valid(ptrs)) ) ne ( nvalid_index ) to the one below
+  if ~same_data(where(ptr_valid(ptrs)), valid) then begin
     ;build pointers
     nptrs = exist( nptr ) ? nptr : nvalid_index
     ptrs  = ptrarr( nptrs )
@@ -76,7 +79,7 @@ pro ptr_load, ptrs, ptr_data, index, $
     for i=0,nix-1 do *ptrs[ix[i]] = ptr_data[index[i]:index[i+1]-1] $
   else $
     for i=0,nix-1 do begin
-    
+
     dims = size(  (*ptrs[ix[i]]).(tag_index), /dimension )
     ndims = n_elements( dims )
     if ndims eq 1 then data = ptr_data[index[i]:index[i+1]-1] else begin
@@ -85,7 +88,7 @@ pro ptr_load, ptrs, ptr_data, index, $
       data_dim   =  size( ptr_data, /dimension )
       reform_dim = [ product( dims[ 0:ndims-2 ]), data_dim[ ndims-1 ] ]
       ref_ptr_data = reform( ptr_data, reform_dim )
-      data = ref_ptr_data[*, index[i]:index[i+1]-1] 
+      data = ref_ptr_data[*, index[i]:index[i+1]-1]
     endelse
     (*ptrs[ix[i]]).(tag_index) = data
   endfor

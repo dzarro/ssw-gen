@@ -52,6 +52,7 @@
 ; Calls       :	SUNGLOBE_GENERIC_FOV::BUILD
 ;
 ; History     :	Version 1, 29-Aug-2016, William Thompson, GSFC
+;               Version 2, 10-Apr-2019, WTT, fix pointer free bug
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -116,7 +117,7 @@ self->idlgrmodel::setproperty, _extra=_extra
 self.obox->setproperty, _extra=_extra
 ;
 if datatype(sstate) eq 'STC' then begin
-    ptr_destroy, self.psstate
+    ptr_free, self.psstate
     self.psstate = ptr_new(sstate)
 endif
 if n_elements(xsize) eq 1 then self.xsize = xsize

@@ -54,6 +54,8 @@
 ;  09-Aug-2013, Kim. Added /ellipse keyword to add ellipse information in structure returned
 ;  13-Sep-2017, Kim. In /ellipse option, was interpreting angle returned by get_image_ellipse wrong (it's counter-clockwise
 ;   from pos x axis, not clockwise from pos y axis). Also make it mod 180.
+;  27-Jan-2020, RHESSI detectors were being added to end of line, separated by spaces if more than one. Changed space to comma
+;   to make it more straightforward to read in hsi_plot_flux.
 ;
 ;-
 ;--------------------------------------------------------------------
@@ -254,9 +256,10 @@ for i = 0,nbox-1 do begin
 		  struct_output = is_struct(struct_output) ? concat_struct(struct_output, struct) : struct		    
 
 			if is_hessi then begin
-				file_line = f_line + string (trim(control.energy_band[0],g14), trim(control.energy_band[1],g14), $
-					 call_function('hsi_coll_segment_list',control.det_index_mask, control.a2d_index_mask, control.front_segment, control.rear_segment), $
-					 format=formatb)
+			 ; replace blanks between dets by commas, Kim, 27-jan-2020
+			  dets = call_function('hsi_coll_segment_list',control.det_index_mask, control.a2d_index_mask, control.front_segment, control.rear_segment)
+			  dets = str_replace(dets,' ',',')
+				file_line = f_line + string (trim(control.energy_band[0],g14), trim(control.energy_band[1],g14), dets, format=formatb)
 			endif else file_line = f_line
 
 			file_output = append_arr(file_output, file_line)

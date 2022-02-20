@@ -19,6 +19,7 @@ function where_pattern, inarray, inpattern, sscnt, print=print
 ;   History:
 ;      5-Nov-1994 (SLF) - to search for byte pattern in unformatted files
 ;     23-Jan-1995 (SLF) - allow non-printing characters (linefeed) in inpattern 
+;      1-apr-2015 (SLF) - got rid of warning
 ;
 ;   Restrictions:
 ;      Size of pattern limited by execute statement length limits
@@ -29,9 +30,7 @@ barr=byte(inarray)		; bytearray to search
 bpat=byte(inpattern)		; byte pattern to look for
 
 if n_elements(bpat) gt 13 then begin
-   tbeep
-   message,/info,"Warning: input pattern truncated to 13 characters"
-   bpat=bpat(0:12)      
+   bpat=bpat(0:12)       ; not sure this is needed in modern times
 endif
 
 ; generate the execute string - (via shift and where)

@@ -7,16 +7,15 @@
 ;
 ; Category    : system utility sockets
 ;
-; Syntax      : IDL> sock_error,url,status_code,response_code=response_code
+; Syntax      : IDL> sock_error,url,code,response_code=response_code
 ;
 ; Inputs      : URL = URL being checked
-;               STATUS_CODE = status code returned in HTTP response
-;               header
+;               CODE = status code returned in HTTP response header
 ;
 ; Outputs     : None
 ;
 ; Keywords    : RESPONSE_CODE = response code returned by IDLnetURL
-;               (can differ from STATUS_CODE if SSL error) 
+;               (can differ from CODE if SSL error) 
 ;               ERR = error string
 ;               VERBOSE = set to print ERR
 ;
@@ -27,41 +26,45 @@
 ;                - added extra check for secure URL
 ;               5 December 2017, Zarro (ADNET)
 ;                - added checks for additional network errors
+;               18-January 2019, Zarro (ADNET)
+;                - added more known network error codes
+;               29-August 2019, Zarro (ADNET)
+;                - added more error checks
+;                3-October 2019, Zarro (ADNET)
+;                - added call to SOCK_DECODE
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
 
-pro sock_error,url,status_code,response_code=response_code,err=err,verbose=verbose
+pro sock_error,url,code,response_code=response_code,err=err,verbose=verbose
 
 verbose=keyword_set(verbose)
 err=''
 
-;-- check for known network issues
+error=0b
+if is_number(code) then begin
+ if stregex(trim(code),'^3',/bool) then return
+ error=stregex(trim(code),'^(4|5|0)',/bool)
+endif 
 
-if is_number(response_code) then begin
- case fix(response_code) of
-  28: err='Network timeout error.'
-  33: err='Range requests not supported.'
-  18: err='Network transfer interrupted.'
-  35: err='SSL connection failed. SSL not supported on current system - '+sock_idl_agent()
-  else: begin
-   if verbose then mprint,'Response code = '+trim(response_code)
-  end
- endcase
- if is_string(err) then begin
-  if verbose then mprint,err
-  return
- endif
+;-- check response code errors
+
+err=sock_decode(response_code)
+if is_string(err) then begin
+ err='Response code = '+trim(response_code)+'. '+err
+ if verbose then mprint,err
+ return
 endif
 
-;-- check for issues not caught previously
+if ~error then return
 
-chk=is_url(url)
-if ~chk then return
-if is_number(status_code) then begin
- scode=trim(status_code)
- if scode eq '404' then smess='URL not found - '+url else $
-  smess='URL not accessible - '+url
+;-- check for HTTP status code errors
+
+if is_number(code) then begin
+ scode=trim(code)
+ if scode eq '404' then smess='URL not found' else $
+  smess='URL not accessible'
+ if is_string(url) then smess=smess+' - '+url
  err='Status code = '+scode+'. '+smess
  if verbose then mprint,err
 endif

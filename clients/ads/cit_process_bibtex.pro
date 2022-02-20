@@ -43,7 +43,9 @@ FUNCTION cit_process_bibtex, input
 ;       added 'id' to output
 ;     Ver.4, 23-Jul-2017, Peter Young
 ;       replaced cit_process_bibtex_author call to
-;       cit_conv_latex_auth. 
+;       cit_conv_latex_auth.
+;     Ver.5, 6-Sep-2019, Peter Young
+;       now calls cit_conv_latex_jnl for "booktitle".
 ;-
 
 
@@ -74,12 +76,19 @@ FOR i=0,ns-1 DO BEGIN
           j=j+1
         ENDELSE 
       ENDWHILE
+     ;
+     ; Deals with any funny characters in people's names.
+     ;
       IF search_string[i] EQ 'editor' THEN BEGIN
         entry[i]=cit_conv_latex_auth(entry[i])
       ENDIF ELSE BEGIN
         entry[i]=entry[i].replace('{','')
         entry[i]=entry[i].replace('},','')
       ENDELSE 
+     ;
+     ; I introduced this to deal \procspie entries.
+     ;
+      IF search_string[i] EQ 'booktitle' THEN entry[i]=cit_conv_latex_jnl(entry[i])
     END
     0:
     ELSE: BEGIN

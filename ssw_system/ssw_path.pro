@@ -77,6 +77,7 @@ pro ssw_path, path, soho=soho, yohkoh=yohkoh, $
 ;      24-mar-2012, S.L.Freeland - iris - (while I was "in there" , repaired an ancient chianti artifact)
 ;      10-apr-2013, S.L.Freeland - so (solar orbiter) - still plan to make this auto updating via $SSW/gen/setup/setup.ssw_env, but not this rev.
 ;      15-jul-2016, S.L.Freeland - goesn(sxi) & goesr(suvi) missions
+;      21-jun-2019, W.T.Thompson - psp
 ;
 ;   Common Block:
 ;      ssw_path_private1 - for !path when called with /save and /restore
@@ -162,8 +163,9 @@ proba2instr=ssw_instruments(/proba2)
 sdoinstr=ssw_instruments(/sdo)
 irisinstr=ssw_instruments(/iris)
 soinstr=ssw_instruments(/so)
+pspinstr=ssw_instruments(/psp)
 
-imap=strupcase([sinstr,yinstr,smminstr,radinstr,optinstr,packinstr,spinstr,trinstr,hsinstr,csinstr,hxinstr,smeinstr,irisinstr,goesinstr,goesninstr,goesrinstr,vobsinstr,sterinstr,hinodeinstr,proba2instr,sdoinstr,soinstr])
+imap=strupcase([sinstr,yinstr,smminstr,radinstr,optinstr,packinstr,spinstr,trinstr,hsinstr,csinstr,hxinstr,smeinstr,irisinstr,goesinstr,goesninstr,goesrinstr,vobsinstr,sterinstr,hinodeinstr,proba2instr,sdoinstr,soinstr,pspinstr])
 mmap=strupcase([replicate('soho',n_elements(sinstr)),$
                 replicate('yohkoh',n_elements(yinstr)), $
                 replicate('smm',n_elements(smminstr)), $
@@ -179,7 +181,8 @@ mmap=strupcase([replicate('soho',n_elements(sinstr)),$
                 replicate('hinode',n_elements(hinodeinstr)), $
                 replicate('proba2',n_elements(proba2instr)), $
                 replicate('sdo',n_elements(sdoinstr)), $
-                replicate('so',n_elements(soinstr))])
+                replicate('so',n_elements(soinstr)), $
+                replicate('psp',n_elements(pspinstr))])
 
 soho=keyword_set(soho)
 yohkoh=keyword_set(yohkoh)
@@ -204,6 +207,7 @@ proba2=keyword_set(proba2)
 sdo=keyword_set(sdo)
 iris=keyword_set(iris)
 so=keyword_set(so)
+psp=keyword_set(psp)
 
 if soho    then instr=[instr,sinstr]
 if yohkoh  then instr=[instr,yinstr]
@@ -227,6 +231,7 @@ if proba2  then instr=[instr,proba2instr]
 if sdo	   then instr=[instr,sdoinstr]
 if iris    then instr=[instr,irisinstr]
 if so 	   then instr=[instr,soinstr]
+if psp     then instr=[instr,pspinstr]
 ; ---------------------------------------------------------------
 ; ---------------------------------------------------------------
 

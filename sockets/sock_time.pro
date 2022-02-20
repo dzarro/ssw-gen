@@ -15,7 +15,8 @@
 ;
 ; Keywords    : ERR = error string
 ;
-; History     : 6-Jan-2015, Zarro (ADNET) - Written
+; History     : 6-Jan-2015, Zarro (ADNET) - written
+;               12-Jan-2019, Zarro (ADNET) - return time in UTC (unless /use_local_time)
 ;-
 
 function sock_time,url,_ref_extra=extra,err=err
@@ -33,8 +34,7 @@ endif
 
 if ~sock_check(url,date=date,err=err,_extra=extra) then return,''
 if ~valid_time(date,err=err) then return,''
-time=anytim(date)+ut_diff(/sec)
-return,anytim(time,/vms)
+return,date
 
 end
 

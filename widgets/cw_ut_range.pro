@@ -76,6 +76,7 @@
 ;  that use utc/tai like show_synop. Must pass in times as string or structure too). If error
 ;  converting string time, print error msg and don't set times to anything. Don't 
 ;  make label base if label is ''.
+; Kim, 29-Oct-2021, In twidget (dial-a-date) allow years 1980-2040 (previously (1980-2020)
 ;-
 ;============================================================================
 
@@ -182,7 +183,7 @@ case uvalue of
 
 	'wstarttime': begin
 		twidget, time_init=value[0], /init
-		twidget, rdate, outsec=outsec, /all, year=[1980,2020], error=error, $
+		twidget, rdate, outsec=outsec, /all, year=[1980,2040], error=error, $
 			message='Select Start Time', /nowild, group_leader=event.top
 		if not error then begin
 			state.value[0] = outsec
@@ -192,7 +193,7 @@ case uvalue of
 
 	'wendtime': begin
 		twidget, time_init=value[1], /init
-		twidget, rdate, outsec=outsec, /all, year=[1980,2020], error=error, $
+		twidget, rdate, outsec=outsec, /all, year=[1980,2040], error=error, $
 			message='Select End Time', /nowild, group_leader=event.top
 		if not error then state.value[1] = outsec
 		end

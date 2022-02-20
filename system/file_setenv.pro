@@ -22,6 +22,8 @@
 ;               - added check for quoted " " values
 ;               11-Aug-2017, Zarro (ADNET)
 ;               - added DEBUG keyword
+;               3-Mar-2019, Zarro (ADNET)
+;               - replace FILE_TEST with FILE_SEARCH
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
@@ -33,14 +35,14 @@ debug=keyword_set(debug)
 
 if is_blank(file) then return
 dfile=local_name(file)
-chk=file_test(dfile,/read,/regular)
-if ~chk then begin
+chk=file_search(dfile,count=fcount)
+if fcount eq 0 then begin
  if debug then mprint,'File file not found - '+dfile
  message,/reset
  return
 endif
 
-if debug then mprint,'Executing - '+dfile
+if verbose then mprint,'Executing - '+dfile
 
 a=strcompress(rd_ascii(dfile))
 ;d=stregex(a,'(.*)(setenv) +([^ ]+) +([^ ]+)',/extract,/sub,/fold)
@@ -51,11 +53,9 @@ if (count eq 0) then begin
  return
 endif
 
-
-
 d=d[*,ok]
 for i=0,count-1 do begin
- if verbose then mprint,'Setting '+d[3,i]+' to '+d[4,i]
+ if debug then mprint,'Setting '+d[3,i]+' to '+d[4,i]
  mklog,d[3,i],d[4,i],/local
 endfor
 

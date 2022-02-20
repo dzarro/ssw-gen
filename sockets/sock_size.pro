@@ -16,6 +16,7 @@
 ; Outputs     : RSIZE = remote file sizes
 ;
 ; Keywords    : ERR = string error
+;               DATE = UTC date of remote file
 ;
 ; History     : 1-Feb-2007,  D.M. Zarro (ADNET/GSFC) - Written
 ;               3-Feb-2007, Zarro (ADNET/GSFC) - added FTP support
@@ -25,13 +26,22 @@
 ;                - added call to SOCK_HEAD
 ;               21-Feb-2015, Zarro (ADNET)
 ;                - moved FTP size check into SOCK_HEAD
+;               21-Dec-2018, Zarro (ADNET)
+;                - changed _EXTRA to _REF_EXTRA
+;               28-Jan-2019, Zarro (ADNET)
+;                - added ARG_PRESENT check
+;               17-Nov-2019, Zarro (ADNET)
+;                - added call to SOCK_CHECK
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
 
-function sock_size,rfile,err=err,_extra=extra,date=rdate
+function sock_size,rfile,err=err,_ref_extra=extra,date=rdate
 
 ;-- usual error check
+
+ret_date=arg_present(rdate)
+rdate=''
 
 err=''
 if ~is_string(rfile) then begin
@@ -45,9 +55,11 @@ rsize=fltarr(nfiles)
 rdate=strarr(nfiles)
 
 for i=0,nfiles-1 do begin
- response=sock_head(rfile[i],size=bsize,date=bdate,_extra=extra)
- rsize[i]=bsize
- if is_string(bdate) then rdate[i]=bdate
+ check=sock_check(rfile[i],size=bsize,date=bdate,_extra=extra)
+ if check then begin
+  rsize[i]=bsize
+  if ret_date then if is_string(bdate) then rdate[i]=bdate
+ endif
 endfor
 
 if nfiles eq 1 then begin

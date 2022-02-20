@@ -46,7 +46,10 @@
 ;
 ; Prev. Hist. :	None
 ;
-; History     :	Version 1, 4-Jan-2016, William Thompson, GSFC
+; History     :	Version 1,  4-Jan-2016, William Thompson, GSFC
+;               Version 2, 22-Feb-2019, WTT, added IAS and ROB servers
+;               Version 3, 12-Apr-2021, WTT, added Solar Orbiter EUI
+;               Version 4, 30-Jul-2021, WTT, corrected AIA choices for ROB
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -82,19 +85,84 @@ if (tag_names(ev, /structure_name) eq 'WIDGET_KILL_REQUEST') then $
 ;
 widget_control, ev.top, get_uvalue=sstate, /no_copy
 ;
-;  The observatory was selected.  Configure the instrument and measurement
-;  widgets based on the observatory.
+;  The server was selected.  Configure the observatory, instrument, and
+;  measurement widgets based on the server.
 ;
 widget_control, ev.id, get_uvalue=uvalue
 case uvalue of
+    'SERVER': begin
+        sstate.observatory = ''
+        *sstate.psource_id = -1
+        widget_control, sstate.winstrument, set_value='Instrument', $
+                        sensitive=0
+        widget_control, sstate.wmeasurement, set_value='Measurement', $
+                        sensitive=0
+        *sstate.pobslabel  = ''
+        *sstate.pinslabel  = ''
+        *sstate.pmeaslabel = ''
+;
+;  If the server was reset, then reset the observatory widget.
+;
+        *sstate.pserver = sstate.server_text(ev.index)
+        case *sstate.pserver of
+            'Server': widget_control, sstate.wobservatory, sensitive=0, $
+                                      set_value='Observatory'
+;
+;  GSFC was selected.  The possible observatories are SDO, STEREO-A, STEREO-B,
+;  and PROBA2.
+;
+            'GSFC': begin
+                observatory_text = $
+                  ['Observatory', 'SDO', 'STEREO-A', 'STEREO-B', 'PROBA2']
+                ptr_free, sstate.pobservatory_text
+                sstate.pobservatory_text = ptr_new(observatory_text)
+                widget_control, sstate.wobservatory, /sensitive, $
+                                set_value=observatory_text, $
+                                set_droplist_select=0
+                widget_control, sstate.winstrument, sensitive=0, $
+                                set_value='Instrument'
+            end
+;
+;  IAS was selected.  The possible observatories are SDO, STEREO-A, STEREO-B,
+;  and PROBA2.
+;
+            'IAS': begin
+                observatory_text = $
+                  ['Observatory', 'SDO', 'STEREO-A', 'STEREO-B', 'PROBA2']
+                ptr_free, sstate.pobservatory_text
+                sstate.pobservatory_text = ptr_new(observatory_text)
+                widget_control, sstate.wobservatory, /sensitive, $
+                                set_value=observatory_text, $
+                                set_droplist_select=0
+            end
+;
+;  ROB was selected.  The possible observatories are SDO, PROBA2, NSO, USET,
+;  Kanzelhoehe, and Solar Orbiter
+;
+            'ROB': begin
+                observatory_text =['Observatory', 'SDO', 'PROBA2', 'NSO', $
+                                   'USET', 'Kanzelhoehe', 'Solar Orbiter']
+                ptr_free, sstate.pobservatory_text
+                sstate.pobservatory_text = ptr_new(observatory_text)
+                widget_control, sstate.wobservatory, /sensitive, $
+                                set_value=observatory_text, $
+                                set_droplist_select=0
+            end
+        endcase
+    end
+;
+;  The observatory was selected.  Configure the instrument and measurement
+;  widgets based on the observatory.
+;
     'OBSERVATORY': begin
         sstate.instrument = ''
         *sstate.psource_id = -1
 ;
 ;  If the observatory was reset, then reset the subsidiary widgets.
 ;
-        case ev.index of
-            0: begin
+        sstate.observatory = (*sstate.pobservatory_text)[ev.index]
+        case sstate.observatory of
+            'Observatory': begin
                 widget_control, sstate.winstrument, set_value='Instrument', $
                                 sensitive=0
                 widget_control, sstate.wmeasurement, set_value='Measurement', $
@@ -106,8 +174,7 @@ case uvalue of
 ;
 ;  SDO was selected.  The possible instruments are AIA and HMI.
 ;
-            1: begin
-                sstate.observatory = 'SDO'
+            'SDO': begin
                 instrument_text = ['Instrument', 'AIA', 'HMI']
                 ptr_free, sstate.pinstrument_text
                 sstate.pinstrument_text = ptr_new(instrument_text)
@@ -123,8 +190,7 @@ case uvalue of
 ;  STEREO-A was selected.  The only possible instrument is EUVI, and the
 ;  possible measurements are the wavelengths.
 ;
-            2: begin
-                sstate.observatory = 'STEREO-A'
+            'STEREO-A': begin
                 sstate.instrument = 'EUVI'
                 ptr_free, sstate.pinstrument_text
                 sstate.pinstrument_text = ptr_new(sstate.instrument)
@@ -148,8 +214,7 @@ case uvalue of
 ;  STEREO-B was selected.  The only possible instrument is EUVI, and the
 ;  possible measurements are the wavelengths.
 ;
-            3: begin
-                sstate.observatory = 'STEREO-B'
+            'STEREO-B': begin
                 sstate.instrument = 'EUVI'
                 ptr_free, sstate.pinstrument_text
                 sstate.pinstrument_text = ptr_new(sstate.instrument)
@@ -173,8 +238,7 @@ case uvalue of
 ;  PROBA2 was selected.  The only possible instrument is SWAP, and the only
 ;  possible measurement is 174.
 ;
-            4: begin
-                sstate.observatory = 'PROBA2'
+            'PROBA2': begin
                 sstate.instrument = 'SWAP'
                 ptr_free, sstate.pinstrument_text
                 sstate.pinstrument_text = ptr_new(sstate.instrument)
@@ -191,6 +255,86 @@ case uvalue of
                 *sstate.pobslabel  = ''
                 *sstate.pinslabel  = 'SWAP/'
                 *sstate.pmeaslabel = '174'
+            end
+;
+;  NSO was selected.  The only possible instrument is GONG, and the only
+;  possible measurement is magnetogram.
+;
+            'NSO': begin
+                sstate.instrument = 'GONG'
+                ptr_free, sstate.pmeasurement_text
+                sstate.pmeasurement_text = ptr_new('Magnetogram')
+                sstate.plabel_text = ptr_new(label_text)
+                *sstate.psource_id = 37
+                sstate.closest_date = ''
+                ptr_free, sstate.psource_ids
+                sstate.psource_ids = ptr_new(*sstate.psource_id)
+                widget_control, sstate.winstrument, /sensitive, $
+                                set_value=sstate.instrument
+                widget_control, sstate.wmeasurement, /sensitive, $
+                                set_value=*sstate.pmeasurement_text
+                *sstate.pobslabel  = ''
+                *sstate.pinslabel = 'GONG/'
+                *sstate.pmeaslabel = 'Mag'
+            end
+;
+;  USET was selected.  The only possible instrument is H-alpha, and the only
+;  possible measurement is H-alpha.
+;
+            'USET': begin
+                sstate.instrument = 'H-alpha'
+                ptr_free, sstate.pmeasurement_text
+                sstate.pmeasurement_text = ptr_new('H-alpha')
+                sstate.plabel_text = ptr_new(label_text)
+                *sstate.psource_id = 47
+                sstate.closest_date = ''
+                ptr_free, sstate.psource_ids
+                sstate.psource_ids = ptr_new(*sstate.psource_id)
+                widget_control, sstate.winstrument, /sensitive, $
+                                set_value=sstate.instrument
+                widget_control, sstate.wmeasurement, /sensitive, $
+                                set_value=*sstate.pmeasurement_text
+                *sstate.pobslabel  = ''
+                *sstate.pinslabel = 'USET/'
+                *sstate.pmeaslabel = 'H-alpha'
+            end
+;
+;  Kanzelhoehe was selected.  The only possible instrument is H-alpha, and the
+;  only possible measurement is H-alpha.
+;
+            'Kanzelhoehe': begin
+                sstate.instrument = 'H-alpha'
+                ptr_free, sstate.pinstrument_text
+                sstate.pinstrument_text = ptr_new(sstate.instrument)
+                ptr_free, sstate.pmeasurement_text
+                sstate.pmeasurement_text = ptr_new('H-alpha')
+                *sstate.psource_id = 50
+                sstate.closest_date = ''
+                ptr_free, sstate.psource_ids
+                sstate.psource_ids = ptr_new(*sstate.psource_id)
+                widget_control, sstate.winstrument, /sensitive, $
+                                set_value=sstate.instrument
+                widget_control, sstate.wmeasurement, /sensitive, $
+                                set_value=*sstate.pmeasurement_text
+                *sstate.pobslabel  = ''
+                *sstate.pinslabel  = 'Kanz/'
+                *sstate.pmeaslabel = 'H-alpha'
+            end
+;
+;  Solar Orbiter was selected.  The possible instruments are EUI/FSI and
+;  EUI/HRI.
+;
+            'Solar Orbiter': begin
+                instrument_text = ['Instrument', 'EUI/FSI', 'EUI/HRI']
+                ptr_free, sstate.pinstrument_text
+                sstate.pinstrument_text = ptr_new(instrument_text)
+                widget_control, sstate.winstrument, /sensitive, $
+                                set_value=instrument_text, set_droplist_select=0
+                widget_control, sstate.wmeasurement, sensitive=0, $
+                                set_value='Measurement'
+                *sstate.pobslabel  = ''
+                *sstate.pinslabel  = ''
+                *sstate.pmeaslabel = ''
             end
         endcase
     end
@@ -219,10 +363,14 @@ case uvalue of
                     measurement_text = ['Measurement', '94', '131', '171', $
                                         '193', '211', '304', '335', '1600', $
                                         '1700', '4500']
+                    source_ids = [-1, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+                    if *sstate.pserver eq 'ROB' then begin
+                        measurement_text = ['Measurement', '171', '304']
+                        source_ids = [-1, 10, 13]
+                    endif
                     ptr_free, sstate.pmeasurement_text, sstate.plabel_text
                     sstate.pmeasurement_text = ptr_new(measurement_text)
                     sstate.plabel_text = ptr_new(measurement_text)
-                    source_ids = [-1, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
                     ptr_free, sstate.psource_ids
                     sstate.psource_ids = ptr_new(source_ids)
                     *sstate.psource_id = -1
@@ -232,12 +380,12 @@ case uvalue of
                     *sstate.pinslabel = 'AIA/'
                 end
 ;
-;  SDO/HMI was selected.  The possible measurements are intensity and magnetic
-;  field.
+;  SDO/HMI was selected.  The possible measurements are intensity and
+;  magnetogram.
 ;
                 'HMI': begin
                     measurement_text = ['Measurement', 'Intensity', $
-                                        'Magnetic Field']
+                                        'Magnetogram']
                     label_text = ['', 'Int','Mag']
                     ptr_free, sstate.pmeasurement_text, sstate.plabel_text
                     sstate.pmeasurement_text = ptr_new(measurement_text)
@@ -250,6 +398,42 @@ case uvalue of
                                     set_value=measurement_text, $
                                     set_droplist_select=0
                     *sstate.pinslabel = 'HMI/'
+                end
+            endcase
+            'Solar Orbiter': case sstate.instrument of
+;
+;  EUI/FSI was selected.  The possible measurements are wavelengths.
+;
+                'EUI/FSI': begin
+                    measurement_text = ['Measurement', '174', '304']
+                    ptr_free, sstate.pmeasurement_text, sstate.plabel_text
+                    sstate.pmeasurement_text = ptr_new(measurement_text)
+                    sstate.plabel_text = ptr_new(measurement_text)
+                    source_ids = [-1, 1000, 1001]
+                    ptr_free, sstate.psource_ids
+                    sstate.psource_ids = ptr_new(source_ids)
+                    *sstate.psource_id = -1
+                    widget_control, sstate.wmeasurement, /sensitive, $
+                                    set_value=measurement_text, $
+                                    set_droplist_select=0
+                    *sstate.pinslabel = 'EUI/FSI/'
+                end
+;
+;  EUI/HRI was selected.  The possible measurements are wavelengths.
+;
+                'EUI/HRI': begin
+                    measurement_text = ['Measurement', '174', '1216']
+                    ptr_free, sstate.pmeasurement_text, sstate.plabel_text
+                    sstate.pmeasurement_text = ptr_new(measurement_text)
+                    sstate.plabel_text = ptr_new(measurement_text)
+                    source_ids = [-1, 1002, 1003]
+                    ptr_free, sstate.psource_ids
+                    sstate.psource_ids = ptr_new(source_ids)
+                    *sstate.psource_id = -1
+                    widget_control, sstate.wmeasurement, /sensitive, $
+                                    set_value=measurement_text, $
+                                    set_droplist_select=0
+                    *sstate.pinslabel = 'EUI/HRI/'
                 end
             endcase
 ;
@@ -347,7 +531,9 @@ endif
 ;  If not already done, determine the closest date.
 ;
 if (sstate.closest_date eq '') and (*sstate.psource_id ge 0) then begin
-    info = hv_search(*sstate.ptarget_date, *sstate.psource_id)
+    ias = *sstate.pserver eq 'IAS'
+    rob = *sstate.pserver eq 'ROB'
+    info = hv_search(*sstate.ptarget_date, *sstate.psource_id, ias=ias, rob=rob)
     if datatype(info) eq 'STC' then begin
         sstate.closest_date = info.date
         heap_free, info
@@ -371,7 +557,7 @@ end
 ;------------------------------------------------------------------------------
 
 function sunglobe_select_hv, date, group_leader=group_leader, label=label, $
-                             _extra=_extra
+                             server=server, _extra=_extra
 ;
 if n_elements(date) eq 0 then get_utc, target_date, /ccsds else begin
     errmsg = ''
@@ -395,8 +581,10 @@ title = widget_label(wtopbase, value='Select Helioviewer image')
 ;
 ;  Set up the dropbox widgets for the observatory, instrument, and measurement.
 ;
-text = ['Observatory', 'SDO', 'STEREO-A', 'STEREO-B', 'PROBA2']
-wobservatory = widget_droplist(wtopbase, value=text, uvalue='OBSERVATORY')
+server_text = ['Server', 'GSFC', 'IAS', 'ROB']
+wserver = widget_droplist(wtopbase, value=server_text, uvalue='SERVER')
+wobservatory = widget_droplist(wtopbase, value='Observatory', sensitive=0, $
+                               uvalue='OBSERVATORY')
 winstrument = widget_droplist(wtopbase, value='Instrument', sensitive=0, $
                               uvalue='INSTRUMENT')
 wmeasurement = widget_droplist(wtopbase, value='Measurement', sensitive=0, $
@@ -438,6 +626,7 @@ widget_control, wdate, set_value=''
 ;  Set up pointers for the source ID and label information.  This allows these
 ;  to be returned by the widget.
 ;
+pserver    = ptr_new('')
 psource_id = ptr_new(-1)
 pobslabel  = ptr_new('')
 pinslabel  = ptr_new('')
@@ -447,6 +636,7 @@ ptarget_date = ptr_new(target_date)
 ;  Define the state structure, and store it in the top base.
 ;
 sstate = {wtopbase: wtopbase, $
+          wobservatory: wobservatory, $
           winstrument: winstrument, $
           wmeasurement: wmeasurement, $
           wtarget: wtarget, $
@@ -454,9 +644,12 @@ sstate = {wtopbase: wtopbase, $
           wdate: wdate, $
           wndays: wndays, $
           wexit: wexit, $
+          server_text: server_text, $
+          pobservatory_text: ptr_new(), $
           pinstrument_text: ptr_new(), $
           pmeasurement_text: ptr_new(), $
           plabel_text: ptr_new(), $
+          pserver: pserver, $
           observatory: '', $
           instrument: '', $
           ptarget_date: ptarget_date, $
@@ -476,6 +669,7 @@ xmanager, 'sunglobe_select_hv', wtopbase, $
 ;
 ;  Extract the result, free the pointer, and return.
 ;
+server = *pserver
 source_id = *psource_id
 label = *pobslabel + *pinslabel + *pmeaslabel
 date = *ptarget_date

@@ -29,6 +29,7 @@
 ; Calls       :	SUNGLOBE_SPICE_FOV__DEFINE
 ;
 ; History     :	Version 1, 12-Jan-2016, William Thompson, GSFC
+;               Version 2, 16-Aug-2021, WTT, corrected height typo
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -99,7 +100,7 @@ case slitnum of
     2: width = 6.0
     3: begin
         width = 30.0
-        halfheight = 14.0
+        height = 14.0
     end
     else: width = 2.0           ;Slit #0 is the default
 endcase
@@ -149,7 +150,7 @@ case slitnum of
     2: width = 6.0
     3: begin
         width = 30.0
-        halfheight = 14.0
+        height = 14.0
     end
     else: width = 2.0           ;Slit #0 is the default
 endcase

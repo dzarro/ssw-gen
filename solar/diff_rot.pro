@@ -24,6 +24,8 @@
 ;                   (DEFAULT)
 ;       SNODGRASS-- use values for magnetic features from Snodgrass and Ulrich,
 ;                   1990.  (Model used for Solar Orbiter planning.)
+;       DOPP_SNOD-- use values for Doppler Residuals from Snodgrass and Ulrich
+;       SPEC_SNOD-- use values for Spectroscopic from Snodgrass and Ulrich
 ;       SIDEREAL -- use sidereal rotation rate (DEFAULT)
 ;       SYNODIC  -- use synodic rotation rate
 ;       CARRINGTON -- use rate in Carrington coordinates.
@@ -49,11 +51,13 @@
 ;          - use double-precision arithmetic
 ;       16 July 2016, Zarro (ADNET) - initialized angle arrays
 ;       08-Jun-2017, William Thompson, ADNET/GSFC, add /SNODGRASS option
+;       13-Oct-2020, William Thompson, add /DOPP_SNOD, /SPEC_SNOD
 ;-
 
 FUNCTION DIFF_ROT, ddays, latitude, howard=howard, allen=allen,debug=debug,$
                    synodic=synodic, sidereal=sidereal,rigid=rigid,rate=rate,$
-                   carrington=carrington, snodgrass=snodgrass
+                   carrington=carrington, snodgrass=snodgrass, $
+                   dopp_snod=dopp_snod, spec_snod=spec_snod
 
 ;-- check if rotating as rigid body
 
@@ -82,6 +86,19 @@ FUNCTION DIFF_ROT, ddays, latitude, howard=howard, allen=allen,debug=debug,$
 ;  (Snodgrass and Ulrich, 1990, Ap. J., 351, 309-316)
 
     rotation = ddays*(14.252d0 - 1.678*sin2l - 2.401*sin4l)
+
+;  Doppler residuals from Snodgrass and Ulrich, 1990
+
+   ENDIF ELSE IF KEYWORD_SET(dopp_snod) then begin
+
+    rotation = ddays*(14.712d0 - 2.396*sin2l - 1.787*sin4l)
+
+;  Spectroscopic from Snodgrass and Ulrich, 1990
+
+   ENDIF ELSE IF KEYWORD_SET(spec_snod) then begin
+
+    rotation = ddays*(14.113d0 - 1.698*sin2l - 2.346*sin4l)
+
    ENDIF ELSE BEGIN
 
 ;  Small magnetic features 

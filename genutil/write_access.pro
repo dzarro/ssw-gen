@@ -18,13 +18,14 @@ function write_access, directory
 ;      scaler directories for now
 ;
 ;   8-Mar-1995 (SLF)
+;   7-Aug-2019, William Thompson, GSFC, added NEWFILE keyword
 ;-
 if not keyword_set(directory) then directory=curdir()
 filename=get_user() + strcompress(string(long(systime(1))),/remove)
 
 chkfile=concat_dir(directory,filename)
 
-file_append, chkfile, 'test', error=error
+file_append, chkfile, 'test', /newfile, error=error
 writable=1-error
 
 if file_exist(chkfile) then file_delete,chkfile

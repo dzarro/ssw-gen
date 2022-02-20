@@ -19,6 +19,6 @@
 function is_https,url
 
 if is_blank(url) then return,0b
-return,stregex(url,'https://',/bool,/fold)
+return,stregex(url[0],'https\:\/\/',/bool,/fold)
 
 end

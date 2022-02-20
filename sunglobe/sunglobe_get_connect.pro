@@ -34,6 +34,7 @@
 ; Side effects:	Adds the SolarSoft PFSS software tree to the path.
 ;
 ; History     :	Version 1, 05-Mar-2018, William Thompson, GSFC
+;               Version 2, 25-Mar-2020, WTT, added solar wind speed adjustment
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -69,6 +70,7 @@ case uvalue of
     'CANCEL': goto, destroy
 ;
     'EXIT': begin
+        widget_control, /hourglass
         widget_control, (*psconnect_state).wbasis, get_value=basis
 ;
         widget_control, (*psconnect_state).wnlines, get_value=nlines
@@ -80,12 +82,15 @@ case uvalue of
         widget_control, (*psconnect_state).wwindspeed, get_value=windspeed
         windspeed = 100 > abs(windspeed) < 5000
 ;
+        widget_control, (*psconnect_state).wadjust, get_value=adjust
+;
         (*psconnect_state).oconnect = $
           obj_new('sunglobe_connect', sstate=*(*psconnect_state).psstate, $
                   nlines=nlines, gausswidth=gausswidth, windspeed=windspeed, $
-                  basis=basis, _extra=_extra)
+                  basis=basis, adjust=adjust, _extra=_extra)
 destroy:
         widget_control, event.top, /destroy
+        widget_control, hourglass=0
         return
     end
 ;
@@ -128,6 +133,9 @@ wgausswidth = cw_field(wtopbase, /return_events, value=5.0, /floating, $
 wwindspeed = cw_field(wtopbase, title='Wind speed (km/s)', /return_events, $
                       value=450.0, uvalue='WINDSPEED', /floating)
 ;
+wadjust = cw_bgroup(wtopbase, 'Adjust for solar wind propagation time', $
+                    /column, /nonexclusive, uvalue='ADJUST')
+;
 wbuttonbase = widget_base(wtopbase, /row)
 dummy = widget_button(wbuttonbase, value='Cancel', uvalue='CANCEL')
 dummy = widget_button(wbuttonbase, value='Apply', uvalue='EXIT')
@@ -143,6 +151,7 @@ psconnect_state = ptr_new({wtopbase: wtopbase, $
                            wnlines: wnlines, $
                            wgausswidth: wgausswidth, $
                            wwindspeed: wwindspeed, $
+                           wadjust: wadjust, $
                            psstate: ptr_new(sstate), $
                            oconnect: obj_new()})
 widget_control, wtopbase, set_uvalue=psconnect_state

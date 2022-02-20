@@ -65,6 +65,11 @@ function ssw_time2filelist, time0, time1, debug=debug, parent=parent, $
 ;       21-feb-2013 - SLF - ftp servers (parent=ftp://...)
 ;       29-aug-2014 - SLF - work around historical .fits bias if PATTERN supplied
 ;       31-jul-2016 - SLF - for remote/http crawl, protect against sock_list ERR ne ''
+;       28-sep-2017 - SLF - tweaked bum-file rejection logic - hopefullly does not break anything...
+;       15-oct-2017 - SLF - mad 28-sep tweak xrt only for now - need to look at that (co-mingled file names lengths)
+;        1-jun-2017 - SLF - mod time search piece - FID/string -> ssw_time2epoch
+;       15-apr-2019 - SLF - mod 15-oct-2017 - allow all xrt through (mixed file lengths ~nominal)
+;       04-jun-2020 - Kim Tolbert - added another loud check before box_message,'No files in all paths'
 ;
 ;   Method:
 ;      combine implied calls to ssw_time2paths, file_search & strmatch
@@ -166,7 +171,7 @@ if not data_chk(in_files,/string) then begin
       endif else if loud then box_message,err   
       endfor
       if n_elements(urllist) eq 1 then begin 
-         box_message,'No files in all paths'
+         if loud then box_message,'No files in all paths'   ; 4-jun-2020, kim added loud check
          return,retval ; !! early exist
       endif else in_files=temporary(urllist(1:*))
       
@@ -196,7 +201,12 @@ tfiles=tfiles(sort(tfiles))
 flen=strlen(tfiles)
 hlen=histogram(flen,min=0)
 if get_logenv('check') ne '' then stop,'tfiles'
-ssok=where(flen eq (where(hlen eq max(hlen)))(0)) ; eliminate bogus files
+if strpos(tfiles[0],'/xrt/') eq -1 then begin 
+   ssok=where(flen eq (where(hlen eq max(hlen)))(0))  ; eliminate bogus files orig paradigm
+endif else begin 
+    box_message,'XRT kludge ssw_time2filelist - generalize for co-mingled file lengths=nominal
+   ssok=lindgen(n_elements(tfiles))
+endelse
 tfiles=tfiles(ssok)
 fnames=ssw_strsplit(tfiles,'/',/last,/tail)
 if keyword_set(rationalize_names) then begin 
@@ -207,11 +217,18 @@ if required_tags(_extra,'FLAT') then $
    fid=extract_fids(fnames,fidfound=fidfound) else $
    fid=extract_fids(fnames,fidfound=fidfound)
 if fidfound then begin  ; 
-   dpos=where(strspecial(fid(0)))
-   fdelim=strmid(fid(0),dpos,1)
-   tf0=time2file(t0,delim=fdelim,year2=dpos eq 6)
-   tf1=time2file(t1,delim=fdelim,year2=dpos eq 6)
-   sst=where(fid ge tf0 and fid le tf1,tcnt)
+   ; --------- block depracated 1-jun-2017
+   ;dpos=where(strspecial(fid(0)))
+   ;fdelim=strmid(fid(0),dpos,1)
+   ;tf0=time2file(t0,delim=fdelim,year2=dpos eq 6)
+   ;tf1=time2file(t1,delim=fdelim,year2=dpos eq 6)
+   ;sst=where(fid ge tf0 and fid le tf1,tcnt)
+   ; ---------------------------------
+   ; ---------- 1-jun-2017 new paradigm
+   ftimes=file2time(fid)
+   sse=ssw_time2epoch(ftimes,t0,t1)
+   sst=where(sse eq 0,tcnt)
+   ; --------------------------------
    if tcnt gt 0 then begin 
       retval=tfiles(sst) 
       if n_params() eq 1 then retval=(temporary(retval))(0) ; 

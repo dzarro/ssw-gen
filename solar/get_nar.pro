@@ -9,11 +9,11 @@
 ;
 ; Explanation : Get NOAA AR pointing from $DIR_GEN_NAR files
 ;
-; Syntax      : IDL>nar=get_nar(tstart)
+; Syntax      : IDL> nar=get_nar(tstart)
 ;
 ; Inputs      : TSTART = start time 
 ;
-; Opt. Inputs : TEND = end time
+; Opt. Inputs : TEND = end time [def = end of day]
 ;
 ; Outputs     : NAR = structure array with NOAA info
 ;
@@ -25,6 +25,7 @@
 ;               UNIQUE = return unique NOAA names
 ;               REMOTE = force searching remote LMSAL archive
 ;               SWPC = search remote SWPC archive if RD_NAR fails
+;               ALL = return all NOAA names (UNIQUE=0)
 ;
 ; History     : 20-Jun-1998, Zarro (EITI/GSFC) - written
 ;               20-Nov-2001, Zarro - added extra checks for DB's
@@ -35,22 +36,52 @@
 ;               31-Mar-2015, Zarro - added check for valid NAR
 ;                                    directory
 ;               23-Jun-2018, Zarro - added REMOTE & SWPC keywords
+;               17-Nov-2018, Zarro - made SWPC and UNIQUE defaults
+;               27-Jan-2019, Zarro - made REMOTE and NEAREST defaults
+;               30-Mar-2019, Zarro - made SWPC default again
+;               18-Apr-2019, Zarro - made OLD way the default again
+;                7-Jan-2020, Zarro - added /ALL
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
 
 function get_nar,tstart,tend,count=count,err=err,quiet=quiet,_ref_extra=extra,$
                  no_helio=no_helio,limit=limit,unique=unique,$
-                 remote=remote,status=status,swpc=swpc
+                 remote=remote,status=status,swpc=swpc,all=all
 
 err=''
-delvarx,nar
+nar=''
 count=0
 loud=~keyword_set(quiet)
-do_remote=keyword_set(remote)
-unique=keyword_set(unique)
+
+do_remote=1b
+if is_number(remote) then if fix(remote) eq 0 then do_remote=0b
+do_unique=1b
+if is_number(unique) then if fix(unique) eq 0 then do_unique=0b
+if keyword_set(all) then do_unique=0b
+
+do_swpc=keyword_set(swpc)
+
+;-- redirect to SWPC
+
+if do_swpc then begin
+ if loud then mprint,'Trying SWPC..'
+ nar=get_swpc(tstart,tend,err=err,count=count,unique=do_unique,$
+             quiet=quiet,_extra=extra,/nearest,no_helio=no_helio,status=status)
+ return,nar
+endif
 
 ;-- start with error checks
+
+err=''
+t1=get_def_times(tstart,tend,dend=t2,/int)
+if is_number(limit) then begin
+ if (abs(t2.mjd-t1.mjd) gt limit) then begin
+  err='Time range exceeds current limit of '+num2str(limit)+' days.'
+  mprint,err
+  return,''
+ endif
+endif
 
 if ~have_proc('rd_nar') then begin
  sxt_dir='$SSW/yohkoh/gen/idl'
@@ -81,46 +112,30 @@ if ~do_remote then begin
  endif
 endif
 
-if do_remote then recompile,'sock_goes'
-
-err=''
-t1=get_def_times(tstart,tend,dend=t2,/int)
-if is_number(limit) then begin
- if (abs(t2.mjd-t1.mjd) gt limit) then begin
-  err='Time range exceeds current limit of '+num2str(limit)+' days.'
-  if loud then mprint,err
-  return,''
- endif
-endif
-
 ;-- call RD_NAR
 
+if do_remote then recompile,'sock_goes'
+
 if loud then begin
- mprint,'Retrieving NAR data between '+anytim2utc(t1,/vms)+' and '+anytim2utc(t2,/vms)
+ mprint,'Searching for NOAA data between '+anytim2utc(t1,/vms)+' and '+anytim2utc(t2,/vms)
 endif
 
-rd_nar,anytim2utc(t1,/vms),anytim2utc(t2,/vms),nar,_extra=extra,status=status
+rd_nar,anytim2utc(t1,/vms),anytim2utc(t2,/vms),nar,_extra=extra,/nearest,status=status
 
-if keyword_set(swpc) then begin
- if (status ne 0) then begin
-  nar=get_swpc(t1,t2,err=err,count=count,unique=0b,/no_helio,_extra=extra)
- endif 
+;-- determine unique AR pointings & append heliocentric pointing tags
+
+if is_struct(nar) then begin
+ count=n_elements(nar)
+ if do_unique then nar=sort_nar(nar,/unique,count=count)
+ if ~keyword_set(no_helio) then nar=helio_nar(nar)
+ return,nar
 endif
 
-if ~is_struct(nar) then begin
- err='No NOAA data found for specified time(s).'
- mprint,err
- return,''
+emess='No NOAA data found for specified time(s).'
+if count eq 0 then begin
+ nar=''
+ if loud then mprint,emess
 endif
-
-;-- determine unique AR pointings
-
-count=n_elements(nar)
-if unique then nar=sort_nar(nar,/unique,count=count)
-
-;-- append heliocentric pointing tags
-
-if ~keyword_set(no_helio) then nar=helio_nar(nar)
 
 return,nar
 

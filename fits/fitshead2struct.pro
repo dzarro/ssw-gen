@@ -49,6 +49,7 @@ function fitshead2struct, head, template, DASH2UNDERSCORE=dash2underscore, $
 ;                   IDL run-time licenses
 ;      24-Nov-2010, N.Rich - Implement /DASH2UNDERSCORE and /SILENT 
 ;      15-sep-2014, S. Freeland - uniq -> ssw_uniq (avoid 8.3/Exelis uniq collision)
+;      20-jun-2019, William Thompson - support multivalued distortion keywords
 ; 
 ;   Motivation:
 ;      use by mreadfits if no structure template is passed 
@@ -152,8 +153,18 @@ if not data_chk(template,/struct) then begin
    if n_elements(utags) lt n_elements(tags) then begin
       atags=lindgen(n_elements(tags))
       dtags=rem_elem(atags,utags)
-      IF ~keyword_set(SILENT) THEN prstr,strjustify(['Duplicate Tags: (only preserving first occurence)',$
-        '  ' + tags(dtags)],/center,/box)
+;
+;  Test if the duplicate tags are distortion keywords.
+;
+      test_tags = tags[dtags]
+      for k=0,n_elements(test_tags)-1 do $
+        if wcs_test_distortion(test_tags[k]) then dtags[k] = -1
+      wdtags = where(dtags ge 0, count)
+      IF (~keyword_set(SILENT)) and (count gt 0) THEN begin
+          dtags = dtags[wdtags]
+          prstr,strjustify(['Duplicate Tags: (only preserving first occurence)',$
+                            '  ' + tags(dtags)],/center,/box)
+      ENDIF
 ;     ---------------   update ----------------
       order=utags(sort(utags))
       rest=rest(order)
@@ -166,7 +177,10 @@ if not data_chk(template,/struct) then begin
 
 ;  -------- create the structure --------------------------------
    structarr=strarr(kcnt)
-   for i=0,kcnt-1 do structarr(i)=fmt_tag(size(fxpar(ohead,id_unesc(keys(i)))))
+   for i=0,kcnt-1 do begin
+       multivalue = wcs_test_distortion(keys[i])
+       structarr[i]=fmt_tag(size(fxpar(ohead,id_unesc(keys[i]),multivalue=multivalue)))
+   endfor
    strstr='{dummy,' + arr2str(tags+':'+structarr) + ','+comarr+','+hisarr + '}'
    retval=mrd_struct([tags,'COMMENT','HISTORY'],[structarr,'strarr('+string(ncomment)+')','strarr('+string(nhistory)+')'],1)
 
@@ -183,8 +197,9 @@ not_found=intarr(kcnt)
 if not keyword_set(nofill) then begin
  for i=0,kcnt-1 do  begin
   unesc_key = id_unesc(keys(i))
+  multivalue = wcs_test_distortion(unesc_key)
   if strlen(strtrim(unesc_key,2)) le 8 then begin    ;Don't try to process overlong tag names (e.g. WCS_STRUCT)
-   temp=fxpar(ohead,id_unesc(keys(i)),count=fcount)
+   temp=fxpar(ohead,id_unesc(keys(i)),count=fcount,multivalue=multivalue)
    dtype=datatype(retval.(i),2)
    ok=1
    if (dtype ge 1) and (dtype le 5) then ok=is_number(temp)

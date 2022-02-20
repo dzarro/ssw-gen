@@ -12,13 +12,15 @@
 ; History     : Written 8-Feb-2010, Zarro(ADNET)
 ;
 ; Contact     : dzarro@standford.edu
+; Modifications:
+;  22_aug-2020, Kim. added https:// to rhost definition for older versions of IDL
 ;-
 ;----------------------------------------------------------------
 
 function soxs::init,_ref_extra=extra
 
 if ~self->synop_spex::init() then return,0
-rhost='hesperia.gsfc.nasa.gov'
+rhost='https://hesperia.gsfc.nasa.gov'
 self->setprop,rhost=rhost,ext='les',org='year',$
                  topdir='/soxs',/full,/round
 

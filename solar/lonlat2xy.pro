@@ -1,7 +1,7 @@
 ;+
 
 function lonlat2xy,helio0,date0, arcmin=arcmin, b0=b0in, radius=sunrin, $
-                   behind =behind
+                   behind =behind, _extra=extra
 
 ; NAME:
 ;	LONLAT2XY
@@ -26,8 +26,8 @@ function lonlat2xy,helio0,date0, arcmin=arcmin, b0=b0in, radius=sunrin, $
 ;       b0 = b0 angle in radians
 ;       radius = solar radius in arsec (arsec even when /arcmin is set)
 ;       behind = Flag array, 1 if behind limb, 0 if in front.
-;	arcmin	- If set, output is in arcminutes, rather than 
-;		  arcseconds.
+;       arcmin	- If set, output is in arcminutes, rather than arcseconds.
+;       quiet  - passed by _extra to get_rb0p, if set stops message about source for b0, p
 ; OPTIONAL KEYWORD OUTPUT:
 ; CAUTIONS: 	x and y are in solar coordinates (solar W and solar N).  There
 ;               is no P-angle here.
@@ -43,6 +43,7 @@ function lonlat2xy,helio0,date0, arcmin=arcmin, b0=b0in, radius=sunrin, $
 ;                               date format confusions.
 ;       T. Metcalf 2002-Apr-11  Added behind keyword
 ;       T. Metcalf 2005-Mar-11  When date is to be ignored, never use it.
+;       K Tolbert  2020-Apr-2   Added _extra to calling arguments, so quiet will get passed to get_rb0p
 ;-
 
 
@@ -65,7 +66,7 @@ if n_elements(b0in) LE 0 OR n_elements(sunrin) LE 0 then begin
                 /info
        date = date[0]
     endif
-   ans  = get_rb0p(date)
+   ans  = get_rb0p(date, _extra=extra)
    if n_elements(b0in) LE 0 then b0 = reform(ans(1,*)) else b0 = b0in
    if n_elements(sunrin) LE 0 then sunr = reform(ans(0,*)) else sunr = sunrin
 endif else begin

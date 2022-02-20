@@ -30,17 +30,22 @@
 ;               29-Mar-2016, Zarro (ADNET) - fixed bug where code not returned 
 ;               25-Aug-2016, Zarro (ADNET) - added CONTENT-LOCATION
 ;                2-Oct-2016, Zarro (ADNET) - renamed from SOCK_CONTENT
+;               19-Jan-2019, Zarro (ADNET) - added RESPONSE_CODE
+;                4-Oct-2019, Zarro (ADNET) - removed RESPONSE_CODE
+;               23-Jul-2020, Zarro (ADNET) - added optional quotes for
+;                                            DISPOSITION
+;                7-May-2021, Zarro (ADNET) - added REF_EXTRA
 ;-
 
 pro sock_content_http,response,type=type,size=bsize,date=date,$
                disposition=disposition,location=location,code=code,$
                chunked=chunked,range=range,resp_array=resp,accept=accept,$
-               content_location=content_location
+               content_location=content_location,_ref_extra=extra
 
 resp=''
-if is_blank(response) then begin
- type='' & date='' & bsize=0l & disposition='' & location='' & code=404L
- chunked=0b & accept='' & content_location=''
+if is_blank(response) then begin   
+ type='' & date='' & bsize=0l & disposition='' & location='' & code=0L
+ chunked=0b & accept='' & content_location='' 
  return
 endif
 resp=response
@@ -97,7 +102,7 @@ if arg_present(disposition) then begin
  disposition_index=where(stregex(resp,'^Content-Disposition:',/bool,/fold),count)
  if (count gt 0) then begin
   disp = resp[disposition_index]
-  temp = stregex( disp, '^Content-Disposition:.*filename="([^"]*)"', /extract, /subexp,/fold)
+  temp = stregex( disp, '^Content-Disposition:.*filename="?([^"]*)"?', /extract, /subexp,/fold)
   file = temp[1]
 
 ;-- strip out any suspicious characters
@@ -130,11 +135,11 @@ endif else content_location=''
 ;-- status code
 
 if arg_present(code) then begin
- code=404L
+ code=0L
  u=stregex(resp,'http.+ ([0-9]+)(.*)',/sub,/extr,/fold)
  chk=where(u[1,*] ne '',count)
  if count gt 0 then code=long(u[1,chk[0]])
-endif else code=404L
+endif else code=0L
 
 ;-- chunked?
 

@@ -3,7 +3,7 @@
 ;
 ; Name        : FERMI_GBM__DEFINE
 ;
-; Purpose     : Define a FERMI GBM data object.  
+; Purpose     : Define a FERMI GBM data object.
 ;
 ; Category    : Synoptic Objects
 ;
@@ -17,41 +17,42 @@
 ;   site now blocks http access
 ; 10-Aug-2012 - Kim.  Call site::search with /use_network if IDL > 6.4. Fixes problem
 ;   with occasional random characters at end of URL. Can remove when DMZ changes sock routines
-; 15-Aug-2012 - Kim. Removed use_network because DMZ changed site::search to use /use_network   
-;   
+; 15-Aug-2012 - Kim. Removed use_network because DMZ changed site::search to use /use_network
+; 22_aug-2020, Kim. added https:// to rhost definition for older versions of IDL
+;
 ;-
 ;----------------------------------------------------------------
 ;
 function fermi_gbm::init,_ref_extra=extra
 
-if ~self->synop_spex::init() then return,0
+  if ~self->synop_spex::init() then return,0
 
-;rhost='fermi.gsfc.nasa.gov'
-rhost='heasarc.gsfc.nasa.gov'
+  ;rhost='fermi.gsfc.nasa.gov'
+  rhost='https://heasarc.gsfc.nasa.gov'
 
-self->setprop,rhost=rhost,ext='pha|fit',org='day',/round,$
-                 topdir='/FTP/fermi/data/gbm/daily',/full, delim='/', suffix='current'
-return,1
+  self->setprop,rhost=rhost,ext='pha|fit',org='day',/round,$
+    topdir='/FTP/fermi/data/gbm/daily',/full, delim='/', suffix='current'
+  return,1
 
 end
 ;-----------------------------------------------------------------
 
-;-- search method 
+;-- search method
 
 function fermi_gbm::search,tstart,tend,count=count,type=type,_ref_extra=extra
 
-type=''
+  type=''
 
-files=self->site::search(tstart,tend,_extra=extra,count=count)
-if count gt 0 then type=replicate('hxr/lightcurves',count) else files=''
-if count eq 0 then message,'No files found.',/cont
+  files=self->site::search(tstart,tend,_extra=extra,count=count)
+  if count gt 0 then type=replicate('hxr/lightcurves',count) else files=''
+  if count eq 0 then message,'No files found.',/cont
 
-return,files
+  return,files
 end
 
 ;----------------------------------------------------------------
 
-pro fermi_gbm__define                 
-void={fermi_gbm, inherits synop_spex}
-return & end
+pro fermi_gbm__define
+  void={fermi_gbm, inherits synop_spex}
+  return & end
 

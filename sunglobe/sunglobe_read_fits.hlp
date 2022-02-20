@@ -1,0 +1,108 @@
+!Overview
+This widget allows the user to read in a local FITS image
+file, and prepare it for ingestion into the SunGlobe
+program.  The image can be scaled, and a color table can be
+applied.
+
+!Read file
+The action of this button depends on which option was
+selected in SunGlobe.  Select the relevant subcategory from
+the menu.
+
+!!Read in local FITS file
+This button calls XPICKFILE to select and read in a local
+FITS file.
+
+!!Read from Solar Orbiter archive
+This button brings up a menu to select a Solar Orbiter FITS
+file closest to the target date, similar to the way that
+Helioviewer images are selected.
+
+!!!Instrument
+Select the instrument (e.g. EUI).
+
+!!!Measurement
+Select the measurement, based on the selected instrument
+(e.g. EUI/FSI/171).
+
+!!!Target date
+The target date to search for.  The closest image to this
+target date will be returned.
+
+!!!Date/Time
+The Date and Time buttons allow the user to change the
+target date and time.  This only affects the search of the
+Helioviewer database--the target date for differential
+rotation and spacecraft pointing will be unaffected.
+
+!!!Closest date
+This displays the closest date found in the Helioviewer
+database to the target date.
+
+!!!#days
+This displays the difference in days between the image date
+and the target date.
+
+!!!Cancel
+Cancels the selection.
+
+!!!Select
+Returns the selection to the SunGlobe program so that the
+image can be read in.
+
+!Adjust color table
+This button calls XLOADCT to select and adjust the color
+table to apply to the image.
+
+!Check pointing
+Draws a circle on the image to show the position of the limb
+based on the current pointing values.
+
+!Fit limb
+Activates the limb fitting section on the right side.
+
+!!Selecting limb points
+In the "Fit limb" mode, points can be selected on the image
+to use in fitting the limb.  The selected points are
+overplotted on the image, and the pixel values appear as a
+list on the right.
+
+!!Remove last point
+Removes the last selected point.
+
+!!Hold radius constant
+With this option selected, only the center position is
+fitted, and the solar radius (i.e. the plate scale) is held
+constant.  Otherwise, all three parameters describing the
+limb circle are fitted.
+
+!!Cancel
+Cancels fitting the limb.  All previously entered points are
+discarded.
+
+!!Fit points
+Fit for the position of the limb based on the selected
+points.  This fit can be either accepted, or one can
+continue with selecting points to fit.
+
+!!Use microscope
+Activate the microscope window for higher accuracy.  The
+portion of the image around the cursor is shown at full
+resolution in a smaller window.
+
+Caution: Using this option may slow down the program.
+
+!Image label
+A text label used for identifying the image within
+SunGlobe.  By default this is the filename.  Only the first
+eight or so characters will actually be displayed.
+
+!Image minumum, maximum
+These fields allow one to set minimum and maximum values
+within which the image should be scaled.
+
+!Help
+Brings up this help widget
+
+!Exit
+Exit the program, and return the selected image to SunGlobe.

@@ -35,6 +35,8 @@
 ;               - added support for threading object method calls
 ;               2-Sept-2017, Zarro (ADNET)
 ;               - pass completion message in ID_THREAD
+;               25-Feb-2019, Zarro (ADNET)
+;               - fixed bug with wrong output message when multiple threads  
 ;-
 
 ;--- call back routine to notify when thread is complete
@@ -50,13 +52,15 @@ common thread,obridge_sav,ocontainer
   new_obj=userdata[0].var_input eq 'new'
   id_obj=userdata[0].var_name
   for i=1,ndata-1 do begin
+   help,/st,userdata[i]
    var_name=userdata[i].var_name
    var_input=userdata[i].var_input
-   var_level=userdata[i].var_level
+   out_level=userdata[i].out_level
+   in_level=userdata[i].in_level
    if (var_name ne '') && (var_input ne '') then begin
     var_val=obridge->getvar(var_name,/no_copy)
     if n_elements(var_val) eq 0 then var_val=null()
-    (scope_varfetch(var_input,level=var_level,/enter))=var_val
+    (scope_varfetch(var_input,level=out_level,/enter))=var_val
    endif
   endfor
  endif
@@ -93,7 +97,6 @@ pro thread,proc,p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,_ref_extra=extra,$
 
 common thread,obridge_sav,ocontainer
 
-
 if keyword_set(reset_thread) then begin
  if obj_valid(obridge_sav) then obj_destroy,obridge_sav
  if obj_valid(ocontainer) then obj_destroy,ocontainer
@@ -114,6 +117,7 @@ if (error ne 0) then begin
  mprint,err_state()
 ; if obj_valid(obridge) then obj_destroy,obridge
 ; if obj_valid(ocontainer) then ocontainer->remove,obridge
+ message,/reset
  catch,/cancel
  return
 endif
@@ -128,9 +132,7 @@ endif
 if ~obj_valid(obridge) then begin
  obridge = Obj_New('IDL_Bridge',callback='thread_callback',_extra=extra)
  if ~obj_valid(obridge) then return
-endif else begin
- obridge->execute,'message,/reset & catch,/cancel & retall'
-endelse
+endif
 
 ;-- if not new thread, save in common for recycling
 
@@ -149,8 +151,8 @@ if ~new_thread then begin
   mprint,'Current thread busy. Come back again later or use /NEW_THREAD to start new thread.'
   return
  endif
+ obridge->execute,'message,/reset & catch,/cancel & retall'
 endif
-
 
 ;-- use scope functions to determine: 
 ;   var_name = local name of argument/keyword
@@ -164,6 +166,7 @@ tname=scope_varname(id_thread,level=1)
 tname=tname[0]
 if is_string(tname) then name=tname else name='Thread submitted at '+!stime
 
+
 if new_thread then input='new' else input=''
 
 ;-- if thread is waiting, return parameters to caller else return to
@@ -172,16 +175,15 @@ if new_thread then input='new' else input=''
 nscope=scope_level()
 wait=keyword_set(wait_thread)
 if wait then begin
- in_level=2-nscope
- out_level=-2 
+ in_level=2L-nscope
+ out_level=in_level-1L 
 endif else begin
- in_level=1-nscope
- out_level=1
+ in_level=1L-nscope
+ out_level=1L
 endelse
 
 if ~is_string(proc) then return
-in_level=-1
-userdata={var_name:name,var_input:input,var_level:out_level}
+userdata={var_name:name,var_input:input,in_level:in_level,out_level:out_level}
 proc=strcompress(proc,/rem)
 is_funct=0b & is_obj=0b
 cmd=proc
@@ -204,7 +206,7 @@ if is_obj then begin
 ;  mprint,'Invalid object method - '+method
 ;  return
 ; endif
- temp={var_name:obj_name,var_input:obj_name,var_level:out_level}
+ temp={var_name:obj_name,var_input:obj_name,in_level:in_level,out_level:out_level}
  userdata=[userdata,temp]
  cmd=obj_name+'->'+method
 endif
@@ -219,7 +221,7 @@ if ~is_obj then begin
   funct=strmid(proc,spos+1,slen-2)
   var_val=null()
   obridge->setvar,var_name,var_val
-  temp={var_name:var_name,var_input:var_name,var_level:out_level}
+  temp={var_name:var_name,var_input:var_name,in_level:in_level,out_level:out_level}
   userdata=[userdata,temp]
   cmd=var_name+'='+funct+'('
  endif
@@ -237,14 +239,13 @@ for i=1,n_params()-1 do begin
  endif
  var_input=scope_varname(scope_varfetch(var_name,/enter),level=in_level)
  obridge->setvar,var_name,var_val
- temp={var_name:var_name, var_input:var_input[0],var_level:out_level}
+ temp={var_name:var_name, var_input:var_input[0],in_level:in_level,out_level:out_level}
  userdata=[userdata,temp]
 endfor
 
 ;-- use scope_varfetch to determine name "var_name" and value "var_value" of keywords at caller level
 
 ntags=n_elements(extra)
-
 if (ntags gt 0) then begin
  if ~is_obj then begin
   chkarg,proc,out=out
@@ -267,7 +268,7 @@ if (ntags gt 0) then begin
   cmd=cmd+delim+var_name+'='+var_name
   var_input=scope_varname(scope_varfetch(var_name,/ref),level=in_level)
   obridge->setvar,var_name,var_val
-  temp={var_name:var_name, var_input:var_input[0],var_level:out_level}
+  temp={var_name:var_name, var_input:var_input[0],in_level:in_level,out_level:out_level}
   userdata=[userdata,temp]
  endfor
 endif

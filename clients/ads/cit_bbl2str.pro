@@ -1,5 +1,5 @@
 
-FUNCTION cit_bbl2str, file, extra=extra
+FUNCTION cit_bbl2str, file, extra=extra, bib_strarr=bib_strarr
 
 
 ;+
@@ -14,6 +14,11 @@ FUNCTION cit_bbl2str, file, extra=extra
 ;             be array.
 ;
 ; OPTIONAL INPUTS:
+;     Bib_Strarr:  This can be used instead of FILE. It is expected to
+;                  be a string array of bibtex entries. For example,
+;                  if you read FILE into an IDL string array, then you
+;                  would specify the string array with BIB_STRARR.
+;
 ;     Extra:  Allows the specification of a file that contains extra 
 ;             citations. This is useful for including citations not found 
 ;             by my ADS search system. **This input is obsolete (just
@@ -27,6 +32,9 @@ FUNCTION cit_bbl2str, file, extra=extra
 ; EXAMPLES:
 ;     IDL> str=cit_bbl2str('publ_list.bbl')
 ;
+;     IDL> b=cit_get_ads_bibtex('2012A&A...539A.146H')
+;     IDL> s=cit_bbl2str(bib_strarr=b)
+;
 ; CALLS:
 ;     CIT_CONV_LATEX_JNL
 ;
@@ -36,30 +44,62 @@ FUNCTION cit_bbl2str, file, extra=extra
 ;     Ver.2, 11-Apr-2018, Peter Young
 ;        The school entry can sometimes extend over more than one
 ;        line, so this has been fixed.
+;     Ver.3, 10-Sep-2019, Peter Young
+;        Updated code to allow bib_strarr to be an input.
+;     Ver.4, 13-Mar-2020, Peter Young
+;        Made j and i long integers in case of a very large input. 
 ;-
 
 
 
-IF n_params() LT 1 THEN BEGIN
-  print,'Use:  IDL> str = cit_bbl2str( file )'
+IF n_elements(file) EQ 0 AND n_elements(bib_strarr) EQ 0 THEN BEGIN
+  print,'Use:  IDL> str = cit_bbl2str( file [, bib_starr= ] )'
   return,-1
 ENDIF
 
-result=file_search(file,count=count)
-IF count EQ 0 THEN BEGIN
-  print,'%CIT_BBL2STR: The input file does not exist. Returning...'
-  return,-1
-ENDIF ELSE BEGIN
-  files=result
-ENDELSE 
+IF n_elements(bib_strarr) EQ 0 THEN BEGIN 
+  result=file_search(file,count=count)
+  IF count EQ 0 THEN BEGIN
+    print,'%CIT_BBL2STR: The input file does not exist. Returning...'
+    return,-1
+  ENDIF ELSE BEGIN
+    files=result
+  ENDELSE
+ ;
+  IF n_elements(extra) NE 0 THEN BEGIN 
+    chck=file_search(extra,count=count)
+    IF count NE 0 THEN BEGIN 
+      files=[file,extra]
+    ENDIF ELSE BEGIN
+      print,'%CIT_BBL2STR: the extra file does not exist, so ignoring.'
+    ENDELSE 
+  ENDIF 
+ ;
+  bib_strarr=''
+  str1=''
+  FOR i=0,count-1 DO BEGIN
+    openr,lin,files[i],/get_lun
+    WHILE eof(lin) NE 1 DO BEGIN 
+      readf,lin,str1
+      bib_strarr=[bib_strarr,str1]
+    ENDWHILE 
+    free_lun,lin
+  ENDFOR 
+  bib_strarr=bib_strarr[1:*]
+ENDIF 
 
 
 str={id: '', author: '', title: '', journal: '', booktitle:'', $
      year: '', volume: '', link: '', eprint:'', $
      pages: '', type:'', ncit: -1, flag1: 0, series: '', editor: '', $
      school: ''}
-list=replicate(str,2000)
-i=-1
+;
+; I have to set a fixed size for list, so I set it based on the size
+; of bib_strarr.
+;
+s=size(bib_strarr,/dim)
+list=replicate(str,s[0]/5)
+i=-1l
 str1=''
 jnl=''
 
@@ -69,22 +109,12 @@ editor_string=''
 school_flag=0b
 school_string=''
 
-IF n_elements(extra) NE 0 THEN BEGIN 
-  chck=file_search(extra,count=count)
-  IF count NE 0 THEN BEGIN 
-    files=[file,extra]
-  ENDIF ELSE BEGIN
-    print,'%CIT_BBL2STR: the extra file does not exist, so ignoring.'
-  ENDELSE 
-ENDIF 
+n=n_elements(bib_strarr)
 
-FOR j=0,n_elements(files)-1 DO BEGIN 
-
-openr,lun,files[j],/get_lun
-
-WHILE eof(lun) NE 1 DO BEGIN
-  readf,lun,str1
- ;
+j=0l
+REPEAT BEGIN 
+;FOR j=0,n-1 DO BEGIN
+  str1=bib_strarr[j]
   IF editor_flag EQ 1 THEN BEGIN
     chck=strpos(str1,'=')
     IF chck GE 0 THEN editor_flag=2b ELSE editor_string=editor_string+str1
@@ -120,7 +150,9 @@ WHILE eof(lun) NE 1 DO BEGIN
    ; it is assumed that the authors are given first in the bibtex format. There are 
    ; two exceptions currently: (i) no author, but an editor; (ii) no author or editor.
    ;
-    readf,lun,str1
+;    readf,lun,str1
+    j=j+1
+    str1=bib_strarr(j)
     str1=strtrim(str1,1)
     bits=str_sep(str1,'author = {')
    ;
@@ -141,7 +173,9 @@ WHILE eof(lun) NE 1 DO BEGIN
    ;
     tst1=0
     WHILE tst1 EQ 0 DO BEGIN
-      readf,lun,str1
+;      readf,lun,str1
+      j=j+1
+      str1=bib_strarr[j]
       str1=strtrim(str1,1)
       bits=str_sep(str1,'title = ')
       IF n_elements(bits) LT 2 THEN astr=astr+bits[0] ELSE tst1=1
@@ -214,7 +248,7 @@ WHILE eof(lun) NE 1 DO BEGIN
     IF pos1 GE 0 AND pos2 GE 0 THEN ed=strmid(editor_string,pos1+1,pos2-pos1-1)
     ed=cit_conv_latex_auth(ed)
     ed=cit_convert_latex(ed)
-    list[i].editor=ed
+    list[i].editor=trim(ed)
   ENDIF
  ;
  ;
@@ -245,10 +279,9 @@ WHILE eof(lun) NE 1 DO BEGIN
     booktitle=strtrim(bits[1],2)
     pos1=strpos(booktitle,'{')
     pos2=strpos(booktitle,'}',/reverse_search)
-    list[i].booktitle=cit_convert_latex(strmid(booktitle,pos1+1,pos2-pos1-1))
-    ;; vol=repstr(vol,'{','')
-    ;; vol=repstr(vol,'}','')
-    ;; list[i].booktitle=tidy_string(vol)
+    booktitle=strmid(booktitle,pos1+1,pos2-pos1-1)
+    booktitle=cit_conv_latex_jnl(booktitle)
+    list[i].booktitle=cit_convert_latex(booktitle)
   ENDIF
  ;
   bits=str_sep(str1,'school =')
@@ -288,11 +321,9 @@ WHILE eof(lun) NE 1 DO BEGIN
     list[i].link=url
   ENDIF
  ;
-ENDWHILE
-
-free_lun,lun
-
-ENDFOR
+  j=j+1
+ ;
+ENDREP UNTIL j GE n
 
 ind=where(list.id EQ '')
 i=min(ind)
@@ -361,7 +392,7 @@ FOR i=0,n-1 DO BEGIN
   result=strpos(list[i].journal,'European Solar Physics Meeting')
   IF result NE -1 THEN list[i].type='conf'
 
-ENDFOR
+ENDFOR 
 
 
 ;

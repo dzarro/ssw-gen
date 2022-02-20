@@ -29,6 +29,8 @@ FUNCTION cit_conv_latex_auth, in_string
 ;
 ; MODIFICATION HISTORY:
 ;       Ver.1, 23-Jul-2017, Peter Young
+;       Ver.2, 10-Sep-2019, Peter Young
+;         Fixed problem when checking for "author = {". 
 ;-
 
 
@@ -41,7 +43,11 @@ outstring=''
 
 astr=trim(in_string)
 
-chck=strpos(astr,'{')
+;
+; The string should have had "author = {" removed before it has been
+; input, but the following removes it, just in case. 
+; 
+chck=strpos(astr,'author = {')
 IF chck GE 0 THEN BEGIN 
   astr=str_replace(astr,'author = {')
  ;

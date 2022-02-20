@@ -9,11 +9,15 @@
 ;
 ; Syntax      : valid=valid_map(map)
 ;
-; Inputs      : MAP = image map structure
+; Inputs      : MAP = image map 
+;               Can be of three types -
+;               Original structure; map object with map structure as
+;               property; or list object with map structure as element. 
 ;
 ; Outputs     : VALID = 1/0 if valid/invalid
 ;
 ; Keywords    : OLD_FORMAT = 1/0 if using old .xp, .yp format or not
+;               TYPE = 0 (structure), 1 (object map), 2 (list map)
 ;
 ; History     : Written 22 October 1997, D. Zarro, SAC/GSFC
 ;               13 July 2009, Zarro (ADNET)
@@ -24,50 +28,70 @@
 ;                - add TRUE_COLOR keyword
 ;               30 August 2015, Zarro (ADNET)
 ;                - Removed COLOR keywords
+;               29 July 2019, Zarro (ADNET)
+;                - added support for LIST object
+;                3 October 2019, Zarro (ADNET)
+;                - added check for scalar input
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
 
-function valid_map,map,err=err,old_format=old_format,_extra=extra
+function valid_map,map,err=err,old_format=old_format,_extra=extra,type=type
 
+type=-1
+old_format=0b
 err='Missing or invalid input map.'
+
+if n_elements(map) eq 0 then return,0b
 
 error=0
 catch,error
 if error ne 0 then begin
- message,err,/cont
+ catch,/cancel
+ err=err_state()
+ message,/reset
  return,0b
 endif
 
-;-- check if true MAP object (IDL > 5)
+;-- check for required tags
 
-sz=size(map)
-dtype=sz[n_elements(sz)-2]
-if dtype eq 11 then begin
- if ~call_function('obj_valid',map[0]) then return,0b
- valid=valid_map(map[0]->get(/map),old_format=old_format)
- return,valid
+if is_struct(map) then begin
+ if ~tag_exist(map,'DATA') then return,0b
+ if ~tag_exist(map,'TIME') then return,0b
+ if ~tag_exist(map,'ID') then return,0b
+
+ old_format=tag_exist(map,'xp') && tag_exist(map,'yp')
+ if ~old_format then begin
+  if ~tag_exist(map,'XC') then return,0b
+  if ~tag_exist(map,'YC') then return,0b
+  if ~tag_exist(map,'DX') then return,0b
+  if ~tag_exist(map,'DY') then return,0b
+ endif
+ type=0
+ err=''
+ return,1b
 endif
 
-;-- otherwise check for required tags
+;-- LIST object?
 
-if dtype ne 8 then return,0b
-if ~tag_exist(map,'DATA') then return,0b
-if ~tag_exist(map,'TIME') then return,0b
-if ~tag_exist(map,'ID') then return,0b
-;if ~tag_exist(map,'ROLL_ANGLE') then return,0b
-;if ~tag_exist(map,'ROLL_CENTER') then return,0b
-
-old_format=tag_exist(map,'xp') and tag_exist(map,'yp')
-if ~old_format then begin
- if ~tag_exist(map,'XC') then return,0b
- if ~tag_exist(map,'YC') then return,0b
- if ~tag_exist(map,'DX') then return,0b
- if ~tag_exist(map,'DY') then return,0b
+if is_list(map) then begin
+ chk=valid_map(map[0],err=err,old_format=old_format)
+ if chk then type=2
+ return,chk
 endif
 
-;-- if we made it here then we're ok
+;-- MAP object?
 
-err=''
-return,1b & end
+if obj_valid(map[0]) then begin
+ if obj_isa(map[0],'map') then begin
+  pmap=map[0]->get(/map,/pointer)
+  if ptr_exist(pmap) then begin
+   chk=valid_map(*pmap,err=err,old_format=old_format)
+   if chk then type=1
+   return,chk
+  endif
+ endif
+endif
+
+return,0b & end
 

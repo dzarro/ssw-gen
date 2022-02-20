@@ -82,65 +82,81 @@
 ;     3. Fixed calculation of bad point indices when excluding long gaps
 ;     4. If old satellite (sms-1,sms-2,goes1,2,3) set different ymin
 ;   5-Jun-2012, Kim. Reformatted indentations to make easier to read
+;   1-Jun-2020, RAS, for GOES16 and higher, call goes16p_clean to identify and
+;     replace bad points.  Added _extra to pass cln_cutoff and cln_group through 
+;     to goes16p_clean.
 ;-
 ;==============================================================================
 
 pro clean_goes, goes, tarray = tarray, yarray = yarray, yclean = yclean, $
-second=second, test=test, satellite=satellite, $
-bad0 = bad0, bad1 = bad1, numstat=numstat, tstat=tstat, stat=stat, error=error
+  second=second, test=test, satellite=satellite, $
+  _extra = _extra, $
+  bad0 = bad0, bad1 = bad1, numstat=numstat, tstat=tstat, stat=stat, error=error
 
-if datatype(goes) eq 'STC' then begin
+  if datatype(goes) eq 'STC' then begin
     tarray = anytim( /sec, goes)
     yarray = reform( [goes.lo,goes.hi],n_elements(tarray), 2)
-    endif
+  endif
 
-error = 1
-yclean = yarray
-checkvar, numstat, -1
-checkvar, second, 0
-checkvar, satellite, 6
-trel = tarray - tarray(0)
-nel  = n_elements(trel)
-if trel(nel-2) eq trel(nel-1) then trel(nel-1)=trel(nel-2)+3.0
+  error = 1
+  yclean = yarray
+  testscale = 1.0
+  checkvar, numstat, -1
+  checkvar, second, 0
+  checkvar, satellite, 6
+  trel = tarray - tarray[0]
+  nel  = n_elements(trel)
+  if trel[nel-2] eq trel[nel-1] then trel[nel-1]=trel[nel-2]+3.0
 
-npts = n_elements(tarray)
+  npts = n_elements(tarray)
 
-bad0 = -1 & bad1 = -1
+  bad0 = -1 & bad1 = -1
 
-; Return indices of bad points (data=-99999, gain change, eclipse, calibration,
-; or detector off) in bad0, bad1 for chan 0, 1.
-find_fits_bad, tarray, yarray, bad0, bad1, numstat, tstat, stat
+  ; Return indices of bad points (data=-99999, gain change, eclipse, calibration,
+  ; or detector off) in bad0, bad1 for chan 0, 1.
+  find_fits_bad, tarray, yarray, bad0, bad1, numstat, tstat, stat
 
-old_sat = (satellite le 3) or (satellite ge 91)
-for ich = 0,1 do begin
-    ;print,'channel = ',ich
-    y = yarray(*,ich)
+  old_sat = (satellite le 3) or (satellite ge 91)
+  chan_cleaned = 0
 
-    ;
-    ;  We have two ymin's, one for a comparison (ymin) and the other for a floor.
-    ;
-    ymin = ([7e-8, old_sat ? 4e-8 : 1e-8])(ich)
-    ymin2= ([1e-8, 1e-10])(ich)
-    y = y>ymin2
+  if satellite ge 16 then begin
+    goes16p_clean, yarray, yclean, bad0, bad1, $
+      tarray = tarray, use_mask = use_mask, $
+      _extra = _extra
 
-    ;if ich eq 1 then test = .22 else test = .17
-    checkvar,test, 7.
-    if satellite ge 8 and ich eq 0 then test = test/5.
-    if numstat ne -1 then if ich eq 0 then bad = bad0 else bad = bad1 else begin
+  endif else begin
+
+    for ich = 0,1 do begin
+      ;print,'channel = ',ich
+      y = yarray[*,ich]
+
+      ;
+      ;  We have two ymin's, one for a comparison (ymin) and the other for a floor.
+      ;
+      ymin = ([7e-8, old_sat ? 4e-8 : 1e-8])[ich]
+      ymin2= ([1e-8, 1e-10])[ich]
+      y = y>ymin2
+
+      ;if ich eq 1 then test = .22 else test = .17
+      checkvar,test, 7.
+      if satellite ge 8 and ich eq 0 then test = test/5.
+      if numstat ne -1 then if ich eq 0 then bad = bad0 else bad = bad1 else begin
 
         ; 8-aug-2008, Kim.  changed from ....*test ge 1 and y gt ymin.  If spike is in neg direction,
         ; wasn't finding it if it was < ymin.  Now if either the low point or the one before
         ; it is > ymin, it will find it.  Also, I don't think adding one to bad is needed.
-        bad   =where( abs(f_div( f_div(y(1:*)-y,y), $
-        (trel(1:*)-trel)/3.0 ) )* test ge 1 and (y(1:*) gt ymin or y gt ymin), nbad)
+        bad   =where( abs(f_div( f_div(y[1:*]-y,y),(trel[1:*]-trel)/3.0 ) )* test ge 1 and $
+          (y[1:*] gt ymin or y gt ymin), nbad)
         ;    if nbad ge 1 then bad = bad+1
-        endelse
-    if bad(0) ne -1 and n_elements(bad) lt n_elements(y) then begin
+      endelse
+
+
+      if bad[0] ne -1 and n_elements(bad) lt n_elements(y)  then begin
         ;
         ; Remove spikes and interpolate
         ;
 
-        y(bad) = 0.0
+        y[bad] = 0.0
         ;
         ; Start at the first bad data point, select a range 10 points below to 200 points
         ; beyond,  if there are no points in the last 10, use spline.  Go on to the
@@ -151,71 +167,71 @@ for ich = 0,1 do begin
         nstep2= 50L
         while nleft gt 0 do begin
 
-            ist = bad_left(0) - 10 > 0
-            addmore:
-            ind = bad_left(0) + nstep < (nel-1)
-            nuse= ind-ist+1
-            wuse= lindgen(nuse) + ist
-            ;
-            ;  Are there any bad points in the tail of the group of points selected?
-            ;  If so take another nstep2
-            ;
-            wend= where(bad_left ge (ind-9) and  bad_left le ind, nend)
-            if nend gt 1 and ind lt (nel-1) then begin
-                nstep = nstep + nstep2
-                goto, addmore
-                endif
-            ;
-            ;  Now we have a sub interval including bad points and good points
-            ;  to pass into the spline interpolation routine.  There are
-            ;  some repeated points in the Yohkoh GOES database which must
-            ;  be filtered from the Spline routine.
-            ;
-            yuse = y(wuse)
-            tuse = trel(wuse)
-            wbad = wuse( where_arr( wuse, bad_left) )
+          ist = bad_left[0] - 10 > 0
+          addmore:
+          ind = bad_left[0] + nstep < (nel-1)
+          nuse= ind-ist+1
+          wuse= lindgen(nuse) + ist
+          ;
+          ;  Are there any bad points in the tail of the group of points selected?
+          ;  If so take another nstep2
+          ;
+          wend= where(bad_left ge (ind-9) and  bad_left le ind, nend)
+          if nend gt 1 and ind lt (nel-1) then begin
+            nstep = nstep + nstep2
+            goto, addmore
+          endif
+          ;
+          ;  Now we have a sub interval including bad points and good points
+          ;  to pass into the spline interpolation routine.  There are
+          ;  some repeated points in the Yohkoh GOES database which must
+          ;  be filtered from the Spline routine.
+          ;
+          yuse = y[wuse]
+          tuse = trel[wuse]
+          wbad = wuse[ where_arr( wuse, bad_left) ]
 
-            wg=where(yuse gt 0.0 and tuse(1:*)-tuse gt 0.0, ngd)
-            if ngd gt 5 then begin
-                ;
-                ;    Exclude long data gaps from interpolation correction
-                ;
-                if n_elements( wbad) ge 50 then begin
-                    wbad2 = where(wbad ne (wbad(1:*)-1), nbad2)
-                    if nbad2 eq 0 then wcont=reform([0,n_elements(wbad)-1],2,1) else $
-                    wcont=transpose([[0,wbad2+1],[wbad2,n_elements(wbad)-1]])
-                    length = wcont(1,*)-wcont(0,*)+1
-                    wshort=where( length lt 10, nshort)
-                    if nshort ge 1 then begin
-                        wbad2 = 0
-                        ;            for i=0,nshort-1 do wbad2 = [wbad2, length(wshort(i))+wcont(0,i)] ; 8-Aug-2008
-                        for i=0,nshort-1 do wbad2 = [wbad2, indgen(length[wshort[i]])+wcont[0,wshort[i]]]
-                        wbad = wbad(wbad2(1:*))
-                        endif else begin
-                        wbad = -1
-                        endelse
-                    endif
+          wg=where(yuse gt 0.0 and tuse[1:*]-tuse gt 0.0, ngd)
+          if ngd gt 5 then begin
+            ;
+            ;    Exclude long data gaps from interpolation correction
+            ;
+            if n_elements( wbad) ge 50 then begin
+              wbad2 = where(wbad ne (wbad[1:*]-1), nbad2)
+              if nbad2 eq 0 then wcont=reform([0,n_elements(wbad)-1],2,1) else $
+                wcont=transpose([[0,wbad2+1],[wbad2,n_elements(wbad)-1]])
+              length = wcont[1,*]-wcont[0,*]+1
+              wshort=where( length lt 10, nshort)
+              if nshort ge 1 then begin
+                wbad2 = 0
+                ;            for i=0,nshort-1 do wbad2 = [wbad2, length(wshort(i))+wcont(0,i)] ; 8-Aug-2008
+                for i=0,nshort-1 do wbad2 = [wbad2, indgen(length[wshort[i]])+wcont[0,wshort[i]]]
+                wbad = wbad[wbad2[1:*]]
+              endif else begin
+                wbad = -1
+              endelse
+            endif
 
-                if wbad(0) ne -1 then $
-                yclean(wbad,ich) = spline(tuse(wg), (yuse(wg) >1.e-10), trel(wbad) )
-                endif $
-            else clean_error=1
-            wleft = where( bad_left gt ind, nleft)
-            if nleft gt 0 then bad_left=bad_left(wleft)
-            endwhile
+            if wbad[0] ne -1 then $
+              yclean[wbad,ich] = spline(tuse[wg], (yuse[wg] >1.e-10), trel[wbad] )
+          endif $
+          else clean_error=1
+          wleft = where( bad_left gt ind, nleft)
+          if nleft gt 0 then bad_left=bad_left[wleft]
+        endwhile
         if ich eq 0 then bad0 = bad else bad1 = bad
-        yclean(*,ich) = yclean(*,ich)>ymin2
-        endif
+        yclean[*,ich] = yclean[*,ich]>ymin2
+      endif
     endfor
+  endelse
+  if n_elements(y) gt 1 then delvarx, y
 
-if n_elements(y) gt 1 then delvarx, y
-
-error=fcheck(clean_error,0)  ;something is returned
-;if not error and not second then begin
-;     clean_goes, tarray=tarray, yarray=yclean, yclean=yclean1,numstat=-1,$
-;     error=error, satellite=satellite, /second
-;     if not error then yclean = yclean1
-;     delvarx, yclean1
-;endif
+  error=fcheck(clean_error,0)  ;something is returned
+  ;if not error and not second then begin
+  ;     clean_goes, tarray=tarray, yarray=yclean, yclean=yclean1,numstat=-1,$
+  ;     error=error, satellite=satellite, /second
+  ;     if not error then yclean = yclean1
+  ;     delvarx, yclean1
+  ;endif
 
 end

@@ -23,6 +23,8 @@
 ;		31-Mar-98 M.D.Morrison - Disabled ssw_check_contrib temporarily
 ;               27-Jan-99 S.L.Freeland - run sswdb_upgrade if
 ;                                        $SSW/site/setup/setup.sswdb_upgrade exists
+;               24-Sep-2019, A.K.Tolbert - remove /verbose from calls to ssw_upgrade and sswdb_upgrade -
+;                                        with switch to wget, there's WAY too much output
 ;Restrictions:
 ;   Perl5 must exist on local machine - installed in '/usr/local/bin/perl'
 ;                                       or must have Perl link with that name
@@ -50,14 +52,14 @@ if file_exist(ssw_upgradef) then begin
 endif  else message,/info,"No configuration file, using predefined $SSW_INSTR"
 ;
 ; ----------- run program to update local SSW from SSW master -------------
-ssw_upgrade, /spawnit, group=get_group(), /verbose
+ssw_upgrade, /spawnit, group=get_group()
 ; -------------------------------------------------------------------------
 
 ; --------- SSWDB upgrade if site config exists ------------------
 sswdb_config=concat_dir('$SSW_SITE_SETUP','setup.sswdb_upgrade') ; AKA $SSW/site/setup/...
 if file_exist(sswdb_config) then begin
    box_message,'Updating SSWDB...'
-   sswdb_upgrade,/spawn, group=get_group(),/verbose
+   sswdb_upgrade,/spawn, group=get_group()
 endif  
 
 ; ------------- check for local contribution resolution -------------------

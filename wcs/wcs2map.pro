@@ -27,6 +27,17 @@
 ;               NO_COPY = avoid internal copy of data [Warning: input
 ;               data is destroyed]
 ;
+;               ERRMSG	= If defined and passed, then any error messages will
+;			  be returned to the user in this parameter rather than
+;			  depending on the MESSAGE routine in IDL.  If no
+;			  errors are encountered, then a null string is
+;			  returned.  In order to use this feature, ERRMSG must
+;			  be defined first, e.g.
+;
+;				ERRMSG = ''
+;				WCS2MAP, DATA, WCS, MAP, ERRMSG=ERRMSG, ...
+;				IF ERRMSG NE '' THEN ...
+;
 ; Calls       :	VALID_WCS, TAG_EXIST, ANYTIM2TAI
 ;
 ; Common      :	None.
@@ -40,18 +51,28 @@
 ; History     :	Version 1, 15-Apr-2005, William Thompson, GSFC
 ;               Version 2, 11-May-2010, WTT, Added tags L0, B0, RSUN
 ;               Version,3, 21-Aug-2012, Zarro (ADNET) - added NO_COPY
+;               Version 4, 09-Jan-2019, WTT, added keyword ERRMSG
 ;
 ; Contact     :	WTHOMPSON
 ;-
 ;
-pro wcs2map, data, wcs, map, id=id,no_copy=no_copy
+pro wcs2map, data, wcs, map, id=id,no_copy=no_copy, errmsg=errmsg
 on_error, 2
 ;
 ;  Check the input parameters.
 ;
-if n_params() ne 3 then message, 'Syntax: WCS2MAP, DATA, WCS, MAP'
-if not valid_wcs(wcs) then message, 'Input not recognized as WCS structure'
-if n_elements(data) eq 0 then message, 'DATA array is undefined' 
+if n_params() ne 3 then begin
+    message = 'Syntax: WCS2MAP, DATA, WCS, MAP'
+    goto, handle_error
+endif
+if not valid_wcs(wcs) then begin
+    message = 'Input not recognized as WCS structure'
+    goto, handle_error
+endif
+if n_elements(data) eq 0 then begin
+    message = 'DATA array is undefined' 
+    goto, handle_error
+endif
 ;
 ;  Make sure that the data array matches the WCS structure.  Trailing
 ;  dimensions of 1 are allowed in either the DATA array or in the WCS
@@ -64,12 +85,21 @@ if sz[0] gt 0 then dim1[0] = sz[1:sz[0]]
 dim2 = replicate(1L, nn)
 dim2[0] = wcs.naxis
 w = where(dim1 ne dim2, count)
-if count gt 0 then message, 'DATA array does not match WCS structure'
+if count gt 0 then begin
+    message = 'DATA array does not match WCS structure'
+    goto, handle_error
+endif
 ;
 ;  Make sure that the WCS is simple.
 ;
-if not tag_exist(wcs, 'SIMPLE') then message, 'WCS not marked as simple'
-if not wcs.simple then message, 'WCS not marked as simple'
+if not tag_exist(wcs, 'SIMPLE') then begin
+    message = 'WCS not marked as simple'
+    goto, handle_error
+endif
+if not wcs.simple then begin
+    message = 'WCS not marked as simple'
+    goto, handle_error
+endif
 ;
 ;  Get the center pixel location, and its coordinates.
 ;
@@ -138,4 +168,8 @@ map = {xc: coord[ix],                   $
 if keyword_set(no_copy) then map=create_struct( {data:temporary(data)},map) else map=create_struct({data:data},map) 
 ;
 return
+;
+HANDLE_ERROR:
+if n_elements(errmsg) ne 0 then errmsg = 'WCS2MAP: ' + message else $
+  message, message, /continue
 end

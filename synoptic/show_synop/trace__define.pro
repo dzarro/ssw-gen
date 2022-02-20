@@ -100,6 +100,7 @@ end
 function trace::have_decoder,err=err,verbose=verbose,_extra=extra
 
 err=''
+
 if self.decoder gt 0 then return,1b
 
 warn='TRACE decompressor not found.'
@@ -159,6 +160,8 @@ end
 
 function trace::search,tstart,tend,_ref_extra=extra,vso=vso,$
                 count=count,type=type
+
+vso=1b
 
 if keyword_set(vso) then $
  files=self->vso_search(tstart,tend,_extra=extra,count=count) else $
@@ -426,7 +429,6 @@ if self->need_thread() || keyword_set(thread) then begin
   self.thread=1b
   thread,'void=obj_new','trace',/wait
   if self.decoder eq 2 then thread,'mklog','SSW_BINARIES',chklog('SSW_BINARIES_TEMP'),/wait
-  obj_destroy,void
  endif
  fdir=file_dirname(dfile)
  if (fdir eq '') || (fdir eq '.') then dfile=concat_dir(curdir(),dfile)

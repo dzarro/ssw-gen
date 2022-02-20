@@ -3,7 +3,11 @@
 ;
 ; Name        : MESSENGER__DEFINE
 ;
-; Purpose     : Define a messenger data object.  
+; Purpose     : Define a messenger data object.  Search method finds MESSENGER XRS data files for specified times on
+;               remote site and returns list of URLs.  Default host and dir to search are defined in object, but user 
+;               can also control them through environment variables MESSENGER_XRS_HOST and MESSENGER_XRS_TOPDIR, e.g.
+;                 setenv,'MESSENGER_XRS_HOST=https://umbra.nascom.nasa.gov'
+;                 setenv,'MESSENGER_XRS_TOPDIR=/messenger'
 ;
 ; Category    : Synoptic Objects
 ;
@@ -12,6 +16,12 @@
 ; History     : Written 8-Feb-2010, Zarro (ADNET)
 ;               Modified 31-July-2013, Zarro (ADNET)
 ;                - added paren around file ext for stregex to work
+;               Modified 1-Jul-2020, Kim Tolbert
+;                - changed primary host to umbra (from hesperia) and allow environment variables to set host and topdir
+;               Modified 22-Aug-2020, Kim Tolbert
+;                - added https:// to rhost definition for older versions of IDL
+;               Modified 10-Sep-2020, Kim Tolbert
+;               - added add_file method to make sure we include both .dat and .lbl files. Called in show_synop::rcopy.
 ;
 ; Contact     : dzarro@standford.edu
 ;-
@@ -20,9 +30,13 @@
 function messenger::init,_ref_extra=extra
 
 if ~self->synop_spex::init() then return,0
-rhost='hesperia.gsfc.nasa.gov'
+
+rhost = chklog('MESSENGER_XRS_HOST')  
+if rhost eq '' then rhost = 'https://umbra.nascom.nasa.gov'
+topdir = chklog('MESSENGER_XRS_TOPDIR')
+if topdir eq '' then topdir = '/messenger'
 self->setprop,rhost=rhost,ext='(dat|lbl)',org='year',$
-                 topdir='/messenger',/full,/round
+                 topdir=topdir,/full,/round
 
 return,1
 end
@@ -50,6 +64,15 @@ doy = strmid(fil, 7, 3)
 return, anytim(doy2utc(doy, year),/tai)
 ;return, anytim2tai(file_break(file,/no_ext))
 
+end
+
+;----------------------------------------------------------------
+
+; function add_file makes sure that both the .dat and .lbl files are included. Both are needed.
+function messenger::add_file, rfiles
+bases = file_break(rfiles, /no_extension, path=paths)
+bases = get_uniq(bases)
+return, [concat_dir(paths,bases+'.dat'), concat_dir(paths,bases+'.lbl')]
 end
 
 ;----------------------------------------------------------------

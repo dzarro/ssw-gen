@@ -98,6 +98,9 @@
 ;                         is only appropriate for small angular distances close
 ;                         to the Sun.
 ;
+;               NOMASK  = If set, then don't mask off pixels obscured by
+;                         solar disk.
+;
 ; Calls       :	DELVARX, VALID_WCS, WCS_CONV_FIND_ANG_UNITS, WCS_CONV_CR_HG,
 ;               WCS_CONV_HCC_HCR, WCS_CONV_HCC_HG, WCS_CONV_HCC_HPC,
 ;               WCS_CONV_HCR_HCC, WCS_CONV_HCR_HPR, WCS_CONV_HG_CR,
@@ -114,6 +117,7 @@
 ;
 ; History     :	Version 1, 12-Dec-2008, William Thompson, GSFC
 ;               Version 2, 18-Dec-2008, WTT, corrected typo
+;               Version 3, 07-Apr-2020, WTT, add NOMASK to header
 ;
 ; Contact     :	WTHOMPSON
 ;-

@@ -26,7 +26,11 @@
 ;
 ; Opt. Inputs :	None
 ;
-; Keywords    : OPACITY = A floating-point opacity value between 0.0
+; Keywords    : IAS     = If set, then read from IAS server.
+;
+;               ROB     = If set, then read from ROB server.
+;
+;               OPACITY = A floating-point opacity value between 0.0
 ;                         (completely transparent) and 1.0 (completely
 ;                         opaque).  If not passed, then 1.0 is assumed.
 ;
@@ -38,12 +42,18 @@
 ;               FITSHEAD2WCS, WCS_CONVERT_TO_COORD, WCS_GET_PIXEL,
 ;               SUNGLOBE_AIA_COLORS, SUNGLOBE_SECCHI_COLORS
 ;
-; History     :	Version 1, William Thompson, 4-Jan-2016, GSFC
+; History     :	Version 1,  4-Jan-2016, William Thompson, GSFC
+;               Version 2, 22-Feb-2019, WTT, add IAS, ROB keywords
+;			Use red for H-alpha.  Correct Kanzelhoehe roll.
+;                       Use orange for SWAP 174.
+;               Version 3, 12-Apr-2021, WTT, correct subimage problem
+;               Version 4, 13-Apr-2021, WTT, Solo/EUI color tables
 ;
-; Contact     :	WTHOMPSON
+; CONTACT     :	WTHOMPSON
 ;-
 ;
-function sunglobe_read_hv, date, source_id, label, opacity=k_opacity
+function sunglobe_read_hv, date, source_id, label, opacity=k_opacity, ias=ias, $
+                           rob=rob
 ;
 ;  Determine the opacity value.
 ;
@@ -65,7 +75,8 @@ endif
 mk_temp_dir, get_temp_dir(), temp_dir
 cd, temp_dir, current=current
 ;
-hv_get, anytim2utc(date,/ccsds), source_id, err=err, local=filename
+hv_get, anytim2utc(date,/ccsds), source_id, err=err, local=filename, ias=ias, $
+        rob=rob
 if err ne '' then begin
     xack, err
     goto, cleanup
@@ -87,6 +98,7 @@ file_delete, temp_dir, /recursive
 ;  Form a WCS structure from the header.
 ;
 header = fitsxml2struct(xml, _extra=_extra)
+if source_id eq 50 then header.crota1 = 0       ;Correct Kanzelhoehe roll
 wcs = fitshead2wcs(header)
 ;
 ;  Form the longitude and latitude arrays for the synoptic map.
@@ -105,7 +117,9 @@ wcs_convert_to_coord, wcs, coord, 'hg', lon, lat, /carrington
 pixel = wcs_get_pixel(wcs, coord)
 i = reform(pixel[0,*,*])
 j = reform(pixel[1,*,*])
-w = where(finite(i) and finite(j))
+w = where(finite(i) and finite(j) and $
+          (i ge 0) and (i le (wcs.naxis[0]-1)) and $
+          (j ge 0) and (j le (wcs.naxis[1]-1)))
 map = bytarr(nx, ny)
 mapmask = bytarr(nx, ny)
 map[w] = image[i[w],j[w]]
@@ -124,6 +138,42 @@ if (source_id ge 20) and (source_id le 27) then begin   ;STEREO EUVI
     wavelength = [171,195,284,304]
     i = (source_id-20) mod 4
     sunglobe_secchi_colors, 'EUVI', wavelength[i], red, green, blue
+endif
+;
+;  Use the standard red color table for H-alpha.
+;
+if (source_id eq 36) or (source_id eq 47) or (source_id eq 50) then begin
+    loadct, 3, rgb_table=rgb_table
+    red   = rgb_table[*,0]
+    green = rgb_table[*,1]
+    blue  = rgb_table[*,2]
+endif
+;
+;  Use an orange color table for SWAP 174.
+;
+if source_id eq 32 then begin
+    loadct, 65, rgb_table=rgb_table
+    red   = reverse(rgb_table[*,0])
+    green = reverse(rgb_table[*,1])
+    blue  = reverse(rgb_table[*,2])
+endif
+;
+;  Use the AIA 171 color table for Solar Orbiter EUI 174, and the AIA color
+;  table for 304
+;
+if (source_id eq 1000) or (source_id eq 1002) then $
+  sunglobe_aia_colors, 171, red, green, blue
+if source_id eq 1001 then sunglobe_aia_colors, 304, red, green, blue
+;
+;  Define the color table for Solar Orbiter EUI Lyman Alpha
+;
+if source_id eq 1003 then begin
+    factor = findgen(256) / 256.
+    loadct, 3, rgb_table=rgb_table
+    red   = rgb_table[*,0]
+    green = rgb_table[*,1]
+    blue  = rgb_table[*,0] * factor
+    blue  = bytscl(blue)
 endif
 ;
 ;  Colorize the image.

@@ -29,6 +29,8 @@ FUNCTION cit_conv_latex_jnl, jnl
 ;
 ; MODIFICATION HISTORY:
 ;      Ver.1, 20-Jul-2017, Peter Young
+;      Ver.2, 5-Sep-2019, Peter Young
+;        added \procspie.
 ;-
 
 
@@ -59,6 +61,7 @@ CASE jnl OF
   '\na': return,'New Ast.'
   '\physscr': return,'Phys. Scripta'
   '\nar': return,'New Ast. Rev.'
+  '\procspie': return,'Proc. SPIE'
   'Journal of Physics B Atomic Molecular Physics': return,'J. Phys. B'
   'Atomic Data and Nuclear Data Tables': return,'ADNDT'
   'Advances in Space Research': return,'Adv. Space Research'

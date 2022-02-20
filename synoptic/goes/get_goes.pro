@@ -63,6 +63,8 @@
 ;    13-Apr-2015, Kim. GOES 13 has XRS data starting Jan 13 2015. Removed it from bad_sats list (now that's just
 ;                 a blank), and added first_date_goes13 to check for GOES 13 data.
 ;    22-Dec-2016, Kim. Changed to check back 15 days instead of 5
+;    15-Aug-2019, Kim. Changed ngdc_site to 'http://satdat.ngdc.noaa.gov/sem/goes/data/full/' (previously 'full'
+;                 was 'new_full')
 ;                 
 ;
 ;-
@@ -88,7 +90,7 @@ if ~file_test(dir_fits, /dir, /write) then dir_fits = curdir()
 dir_fits_final = chklog('GOES_FITS_FINAL')
 if ~file_test(dir_fits_final, /dir, /write) then dir_fits_final = curdir()
 
-ngdc_site = 'http://satdat.ngdc.noaa.gov/sem/goes/data/new_full/'
+ngdc_site = 'http://satdat.ngdc.noaa.gov/sem/goes/data/full/'
 
 bad_sats = ' '
 bad_dates_goes15 = ['25-oct-2012', ' 1-nov-2012', ' 2-nov-2012', ' 3-nov-2012',' 4-nov-2012', '8-nov-2012', $

@@ -24,6 +24,11 @@ time.
 Select an observation from the Helioviewer database closest
 in time to the target date.
 
+!!!Server
+Select the server, i.e. GSFC, IAS, or ROB.  The selection of
+observatories, instruments, and measurements depends on the
+server.
+
 !!!Observatory
 Select the observatory (e.g. SDO).
 
@@ -63,6 +68,19 @@ Cancels the selection.
 !!!Select
 Returns the selection to the SunGlobe program so that the
 image can be read in.
+
+!!Read in local FITS file
+Opens widget interface to select and read in a local FITS
+file, and prepare it for ingestion into SunGlobe.  For more
+information, see the help option in that widget.
+
+!!Read from Solar Orbiter archive
+Opens same widget interface as the "Read in local FITS file"
+option, except that files are taken from the Solar Orbiter
+archive (SOAR).  For more information, see the help option
+in that widget.  If the SOAR_DIRECTORY environment variable
+is defined, then downloaded files are stored in that
+directory -- otherwise they are temporary.
 
 !!Read in PFSS magnetic field
 Reads in a potential field source surface model calculation
@@ -144,6 +162,17 @@ Cancel estimating the magnetic field connection point.
 Estimate the magnetic connection point, using the specified
 parameters.
 
+!!Read magnetic connection file
+Reads in an ASCII output file from the Magnetic Connectivity
+Tool (http://connect-tool.irap.omp.eu/).  Connectivity
+points for fast solar wind are displayed in red, slow solar
+wind in blue, and measured solar wind in green.
+
+!!Change spacecraft
+Opens widget interface to change the viewpoint to a
+different spacecraft or planet.  For more information, see
+the help option in that widget. 
+
 !!Save images
 Save the currently read-in images into a file.  The images
 will be saved into a file with the extension ".geny",
@@ -185,6 +214,15 @@ pointing parameters to their original values.
 
 !Configure menu
 
+!!Configure orbit trace
+Brings up a widget to allow the user to control the
+parameters defining the orbital trace.  The parameters
+consist of the number of time steps before and after the
+target time, the time difference between steps, and the
+units.  Steps in the past are shown as crosses (X), and
+points in the future are shown as diamonds.  Both symbols on
+top of each other mark the target time.
+
 !!Configure SPICE field-of-view
 Brings up a widget to allow the user to configure the
 parameters describing the SPICE field-of-view.
@@ -201,14 +239,38 @@ parameters describing the PHI field-of-view.
 When a spacecraft other than Solar Orbiter is selected, the
 user is presented with a generic field-of-view menu.
 
-!!Configure orbit trace
-Brings up a widget to allow the user to control the
-parameters defining the orbital trace.  The parameters
-consist of the number of time steps before and after the
-target time, the time difference between steps, and the
-units.  Steps in the past are shown as crosses (X), and
-points in the future are shown as diamonds.  Both symbols on
-top of each other mark the target time.
+!Paint FOV menu
+The commands under the "Paint FOV" menu allow one to paint
+the current field-of-view of one of the instruments onto the
+solar surface.  The painted FOV persists until erased or
+replaced by another painted FOV, regardless of any other
+changes made within SunGlobe.  Only one FOV can be painted
+at a time.
+
+The purpose of the painted FOV is to show what area of the
+Sun is being seen by one instrument when viewed from another
+perspective.  For example, painting the Solar Orbiter EUI
+field-of view can show how this same region appears from an
+Earth-based telescope.
+
+!!Paint SPICE field-of-view
+Paints the currently configured SPICE field-of-view.  To
+make this option work properly, given the pixelization of
+the painting process, the SPICE FOV must have some width to
+it.  For example, for a sit-and-stare observation with one
+of the narrow slits, one should configure the SPICE FOV to
+provide some width beyond a single slit position.
+
+!!Paint the EUI field-of-view
+Paints the currently configured EUI high resolution
+field-of-view.
+
+!!Paint the PHI field-of-view
+Paints the currently configured PHI high resolution
+field-of-view.
+
+!!Erase paint
+Erases any painted field-of-view.
 
 !Options menu
 
@@ -223,10 +285,31 @@ on or off.  If the PFSS model has not yet been read in, then
 it will be read in here.  See "Read in PFSS magnetic field"
 under "File" for more information.
 
+!!Connection file image on/off
+Selecting this option controls whether or not the data read
+in from the Magnetic Connection Tool are displayed or not.
+If no data have been read in yet, then it will be read in
+here.  See "Read magnetic connection file" under "File" for
+more information.
+
 !!Spacecraft boresight on/off
 Selecting this option controls whether or not a plotting
 symbol representing the direction of the spacecraft
 boresight is visible.
+
+!!Orbit trace on/off
+Controls whether or not symbols representing the progress of
+the subspacecraft point across the solar surface are shown.
+Steps in the past are shown as crosses (X), and points in
+the future are shown as diamonds.  Both symbols on top of
+each other mark the target time.  The number of points and
+the time between points can be controlled through the
+Configure pull-down menu.  By default the points are
+separated by one day.
+
+!!Active region IDs on/off
+Controls whether or not ID labels for recent NOAA active
+regions are displayed.
 
 !!SPICE field-of-view on/off
 Selecting this option controls whether or not a line drawing
@@ -252,7 +335,7 @@ under the Action menu.  Note that the apparent size of the
 PHI field-of-view will depend strongly on the viewing
 distance defined in the Orientation section.
 
-!!Field-of-view on/off
+!!Field-of-view on/off (gen)
 When a spacecraft other than Solar Orbiter is selected, a
 generic field-of-view can be turned on or off.  The format
 of the FOV can be modified with the configure option under
@@ -260,15 +343,8 @@ the Action menu.  Note that the apparent size of the
 field-of-view will depend strongly on the viewing distance
 defined in the Orientation section.
 
-!!Orbit trace on/off
-Controls whether or not symbols representing the progress of
-the subspacecraft point across the solar surface are shown.
-Steps in the past are shown as crosses (X), and points in
-the future are shown as diamonds.  Both symbols on top of
-each other mark the target time.  The number of points and
-the time between points can be controlled through the
-Configure pull-down menu.  By default the points are
-separated by one day.
+!!Field-of-view paint on/off
+Controls whether or not a painted field-of-view is visible.
 
 !Ephemeris (cursor option)
 Selecting this option allows the user to control the
@@ -333,6 +409,10 @@ limb, then this section will not be visible.
 The X and Y spacecraft pointing widgets show the currently
 selected spacecraft pointing in arc seconds.  These can also
 be edited to change the pointing.
+
+!!Use ephemeris values
+Loads in pointing values based on SPICE ephemeris data, if
+available.
 
 !Orientation (cursor option)
 Selecting this option allows the user to control the globe

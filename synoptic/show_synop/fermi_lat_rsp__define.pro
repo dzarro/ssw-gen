@@ -15,6 +15,7 @@
 ; 15-Aug-2012 - Kim. Removed use_network because DMZ changed site::search to use /use_network
 ; 18-Dec-2013, Kim.  Put online
 ;  29-Sep-2015, Kim. Added check for LAT_PARENT_DIR env var..  If set, use that as parent directory for archive data.
+;  22_aug-2020, Kim. added https:// to rhost definition for older versions of IDL
 ;
 ;-
 ;----------------------------------------------------------------
@@ -22,7 +23,7 @@
 function fermi_lat_rsp::init,_ref_extra=extra
 
 if ~self->synop_spex::init() then return,0
-rhost='hesperia.gsfc.nasa.gov'
+rhost='https://hesperia.gsfc.nasa.gov'
 
 parent = str_replace(chklog('LAT_PARENT_DIR'), '/data', '')
 if ~is_string(parent) then parent = '/fermi/lat'

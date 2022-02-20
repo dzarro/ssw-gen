@@ -55,7 +55,9 @@
 ;               SUNGLOBE_DISPLAY, SUNGLOBE_ORIENT, SUNGLOBE_DISTANCE,
 ;               SUNGLOBE_REPOINT, SUNGLOBE_GET_EPHEM,
 ;               SUNGLOBE_SPICE_CONFIG_FOV, SUNGLOBE_SPICE_FOV__DEFINE,
-;               SUNGLOBE_CHANGE_DATE, SUNGLOBE_GET_PFSS, SUNGLOBE_GET_CONNECT
+;               SUNGLOBE_CHANGE_DATE, SUNGLOBE_GET_PFSS, SUNGLOBE_GET_CONNECT, 
+;               SUNGLOBE_GET_FITS, XACK, WHICH, SUNGLOBE_CHANGE_SPACECRAFT,
+;               SUNGLOBE_ADJUST_POINTING
 ;
 ; Prev. Hist. :	Based on d_globe.pro in the IDL examples directory.
 ;
@@ -71,6 +73,20 @@
 ;                       Move send point option to SUNGLOBE_CONVERT subwidget
 ;               Version 9, 05-Mar-2018, WTT, add magnetic connection point
 ;               Version 10, 02-Apr-2018, WTT, unbounded number of images
+;               Version 11, 14-Jan-2019, WTT, added local FITS option
+;               Version 12, 18-Jan-2019, WTT, added call to GET_SUNSPICE_SC_POINT
+;               Version 13, 22-Feb-2019, WTT, add support for IAS, ROB servers
+;               Version 14, 04-Mar-2019, WTT, check if SunSPICE in path
+;                       before calling SUNGLOBE_GET_SC_POINT or
+;                       SUNGLOBE_GET_CONNECT
+;               Version 15, 01-Apr-2019, WTT, show/hide active region IDs
+;               Version 16, 03-Apr-2019, WTT, call SUNGLOBE_CHANGE_SPACECRAFT
+;                       fix pointing bug when date is changed
+;               Version 17, 10-Apr-2019, WTT, fix image restore diff. rot. bug
+;                       Add support for Magnetic Connectivity Tool
+;               Version 18, 24-Dec-2019, WTT, add Adjust Pointing option
+;               Version 19, 21-Jan-2021, WTT, add Solar Orbiter option
+;               Version 20, 17-Aug-2021, WTT, add FOV paint events
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -103,6 +119,7 @@ case uvalue of
         if selephem then begin
             widget_control, sstate.wselephem, set_value=0
             widget_control, sstate.wconvert, sensitive=0
+            widget_control, sstate.wuseephem, sensitive=0
             widget_control, sstate.wselorient, set_value=1
             widget_control, sstate.wyaw, sensitive=1
             widget_control, sstate.wpitch, sensitive=1
@@ -140,6 +157,7 @@ case uvalue of
         if selephem then begin
             widget_control, sstate.wselephem, set_value=0
             widget_control, sstate.wconvert, sensitive=0
+            widget_control, sstate.wuseephem, sensitive=0
             widget_control, sstate.wselorient, set_value=1
             widget_control, sstate.wyaw, sensitive=1
             widget_control, sstate.wpitch, sensitive=1
@@ -215,6 +233,7 @@ case uvalue of
         if selephem then begin
             widget_control, sstate.wselephem, set_value=0
             widget_control, sstate.wconvert, sensitive=0
+            widget_control, sstate.wuseephem, sensitive=0
             widget_control, sstate.wselorient, set_value=1
             widget_control, sstate.wyaw, sensitive=1
             widget_control, sstate.wpitch, sensitive=1
@@ -227,7 +246,7 @@ case uvalue of
 ;  Bring up the help widget.
 ;------------------------------------------------------------------------------
     'HELP': widg_help, 'sunglobe.hlp', /hierarchy, group_leader=event.top, $
-                       /no_block
+                       /no_block, /nofont
 ;------------------------------------------------------------------------------
 ;  If the ephemeris button is selected, then disable all the widgets in the
 ;  orientation menu.
@@ -239,6 +258,10 @@ case uvalue of
         widget_control, sstate.wdist, sensitive=0
         widget_control, sstate.wlockorient, sensitive=0
         widget_control, sstate.wconvert, sensitive=1
+;
+;  Enable the "Use ephemeris values" button.
+;
+        widget_control, sstate.wuseephem, sensitive=1
 ;
 ;  Make sure only the ephemeris button is selected.
 ;
@@ -275,6 +298,7 @@ case uvalue of
 ;
         widget_control, sstate.wselephem, set_value=0
         widget_control, sstate.wconvert, sensitive=0
+        widget_control, sstate.wuseephem, sensitive=0
         widget_control, sstate.wselorient, set_value=1
         widget_control, sstate.wselpan, set_value=0
     end
@@ -293,6 +317,7 @@ case uvalue of
 ;
         widget_control, sstate.wselephem, set_value=0
         widget_control, sstate.wconvert, sensitive=0
+        widget_control, sstate.wuseephem, sensitive=0
         widget_control, sstate.wselorient, set_value=0
         widget_control, sstate.wselpan, set_value=1
     end
@@ -329,6 +354,7 @@ case uvalue of
 ;  Apply the change.
 ;
         sunglobe_change_date, sstate
+        sunglobe_scpoint, sstate
     end
 ;------------------------------------------------------------------------------
 ;  If a target date event has been sent from the calling widget, then update
@@ -363,6 +389,16 @@ case uvalue of
         sunglobe_convert, sstate, group_leader=event.top, /modal
         sstate.owindow->draw, sstate.oview
         sunglobe_parse_tmatrix, sstate
+    end
+;------------------------------------------------------------------------------
+;  Get the pointing parameters from the spacecraft ephemeris.
+;------------------------------------------------------------------------------
+    'EPHEMPNT': begin
+        which, 'load_sunspice', /quiet, outfile=temp
+        if temp ne '' then begin
+            sunglobe_get_sc_point, sstate
+            sunglobe_scpoint, sstate
+        end else xack, 'SunSPICE package not available'
     end
 ;------------------------------------------------------------------------------
 ;  If any of the YAW, PITCH, or ROW entries have been edited, then retrieve the
@@ -466,12 +502,32 @@ jpeg_cleanup:
         sunglobe_parse_tmatrix, sstate
     end
 ;------------------------------------------------------------------------------
+;  Turn the painted FOV on or off.
+;------------------------------------------------------------------------------
+    'PAINTFOV': begin
+        if ptr_valid(sstate.pfovpaint) then begin
+           sstate.hidefovpaint = 1 - sstate.hidefovpaint
+           (*sstate.pfovpaint).omap_alpha->setproperty, hide=sstate.hidefovpaint
+           sunglobe_display, sstate
+        endif
+    end
+;------------------------------------------------------------------------------
 ;  Turn the orbit trace on or off.
 ;------------------------------------------------------------------------------
     'ORBIT': begin
         sstate.hideorbit = 1 - sstate.hideorbit
         if obj_valid(sstate.oorbit) then $
           sstate.oorbit->setproperty, hide=sstate.hideorbit
+        sstate.owindow->draw, sstate.oview
+        sunglobe_parse_tmatrix, sstate
+    end
+;------------------------------------------------------------------------------
+;  Turn the NOAA active region IDs on or off.
+;------------------------------------------------------------------------------
+    'NAR': begin
+        sstate.hidenar = 1 - sstate.hidenar
+        if obj_valid(sstate.onar) then $
+          sstate.onar->setproperty, hide=sstate.hidenar
         sstate.owindow->draw, sstate.oview
         sunglobe_parse_tmatrix, sstate
     end
@@ -524,9 +580,48 @@ jpeg_cleanup:
             sunglobe_orbit_config, sstate, group_leader=event.top, /modal
             sstate.hideorbit = 0
             sstate.oorbit->setproperty, hide=sstate.hideorbit
-        end else xack, 'Unable to get ephemeris information'
+        end else xack, 'SunSPICE package not available'
         sstate.owindow->draw, sstate.oview
         sunglobe_parse_tmatrix, sstate
+    end
+;------------------------------------------------------------------------------
+;  Paint the SPICE field-of-view
+;------------------------------------------------------------------------------
+    'PAINTSPICE': begin
+       sunglobe_paint_fov, sstate, /spice
+       sunglobe_diff_rot, sstate, /fovpaint
+       sunglobe_display, sstate
+    end
+;------------------------------------------------------------------------------
+;  Paint the EUI field-of-view
+;------------------------------------------------------------------------------
+    'PAINTEUI': begin
+       sunglobe_paint_fov, sstate, /eui
+       sunglobe_diff_rot, sstate, /fovpaint
+       sunglobe_display, sstate
+    end
+;------------------------------------------------------------------------------
+;  Paint the PHI field-of-view
+;------------------------------------------------------------------------------
+    'PAINTPHI': begin
+       sunglobe_paint_fov, sstate, /phi
+       sunglobe_diff_rot, sstate, /fovpaint
+       sunglobe_display, sstate
+    end
+;------------------------------------------------------------------------------
+;  Paint the generic field-of-view
+;------------------------------------------------------------------------------
+    'PAINTGEN': begin
+       sunglobe_paint_fov, sstate
+       sunglobe_diff_rot, sstate, /fovpaint
+       sunglobe_display, sstate
+    end
+;------------------------------------------------------------------------------
+;  Erase the painted field-of-view
+;------------------------------------------------------------------------------
+    'ERASEPAINT': begin
+       sstate.pfovpaint = ptr_new()
+       sunglobe_display, sstate
     end
 ;------------------------------------------------------------------------------
 ;  Handle zoom events here.
@@ -554,9 +649,43 @@ jpeg_cleanup:
 ;  Estimate PFSS magnetic connection point.
 ;------------------------------------------------------------------------------
     'GETCONNECT': begin
-        sunglobe_get_connect, sstate, group=event.top, /modal
+        which, 'load_sunspice', /quiet, outfile=temp
+        if temp ne '' then $
+          sunglobe_get_connect, sstate, group=event.top, /modal $
+        else xack, 'SunSPICE package not available'
         sstate.owindow->draw, sstate.oview
         sunglobe_parse_tmatrix, sstate
+    end
+;------------------------------------------------------------------------------
+;  Read output file from Magnetic Connective Tool website
+;------------------------------------------------------------------------------
+    'READCONNFILE': begin
+read_connection_file:
+        conn = sunglobe_read_connectfile(group_leader=event.top)
+        if datatype(conn) eq 'STC' then begin
+;
+;  Check the spacecraft against the current viewpoint.
+;
+            connsc = parse_sunspice_name(conn.spacecraft)
+            if connsc ne sstate.spacecraft then begin
+                text = 'Connection viewpoint ' + conn.spacecraft + $
+                       ' does not match current SunGlobe viewpoint, continue?'
+                if not xanswer(text) then break
+            endif
+;
+;  If a connection file was previously read in, then destroy those data.
+;
+            if ptr_valid(sstate.pconnfile) then begin
+                obj_destroy, (*sstate.pconnfile).omap_alpha
+                ptr_free, sstate.pconnfile
+            endif
+;
+;  Add the connectivity data to the globe.
+;
+            sstate.pconnfile = ptr_new(conn)
+            sunglobe_diff_rot, sstate, /connfile
+            sunglobe_display, sstate
+        endif
     end
 ;------------------------------------------------------------------------------
 ;  Turn the PFSS magnetic field model on or off.  If it hasn't been read
@@ -597,9 +726,34 @@ jpeg_cleanup:
             endif
             sstate.oconnect->setproperty, hide=sstate.hideconnect
         end else begin
-            sunglobe_get_connect, sstate, group=event.top, /modal
-            sstate.hideconnect = 0
+            which, 'load_sunspice', /quiet, outfile=temp
+            if temp ne '' then begin
+                sunglobe_get_connect, sstate, group=event.top, /modal
+                sstate.hideconnect = 0
+            end else xack, 'SunSPICE package not available'
         endelse
+        sstate.owindow->draw, sstate.oview
+        sunglobe_parse_tmatrix, sstate
+    end
+;------------------------------------------------------------------------------
+;  Turn then Magnetic Connection Tool image on or off.  If it hasn't
+;  been read in yet, then read it in.
+;------------------------------------------------------------------------------
+    'SHOWCONNFILE': begin
+        if not ptr_valid(sstate.pconnfile) then goto, read_connection_file
+        sstate.hideconnfile = 1 - sstate.hideconnfile
+        (*sstate.pconnfile).omap_alpha->setproperty, hide=sstate.hideconnfile
+;
+;  Draw the large version and read it out.
+;
+        sstate.opixmap->draw, sstate.opixview
+        otempimage = sstate.opixmap->read()
+        otempimage->getproperty, data=tempimage
+        obj_destroy, otempimage
+;
+;  Update the globe and associated widget fields.
+;
+        sstate.oimage->setproperty, data=temporary(tempimage)
         sstate.owindow->draw, sstate.oview
         sunglobe_parse_tmatrix, sstate
     end
@@ -612,7 +766,7 @@ jpeg_cleanup:
 ;  Select an HV source ID.
 ;
         source_id = sunglobe_select_hv(target_date, group=event.top, $
-                                       label=label)
+                                       label=label, server=server)
 ;
 ;  If a source ID has been selected, then read in the image.
 ;
@@ -622,8 +776,10 @@ jpeg_cleanup:
 ;  Set a default opacity based on the number of images already displayed.
 ;
             opacity = 1. / ((sstate.nmapped<1) + 1.)
+            ias = server eq 'IAS'
+            rob = server eq 'ROB'
             result = sunglobe_read_hv(target_date, source_id, label, $
-                                      opacity=opacity)
+                                      opacity=opacity, ias=ias, rob=rob)
 ;
 ;  If a valid image has been read in, then add it to an image widget base.
 ;  Make sure there are enough bases for the new image.
@@ -674,6 +830,74 @@ jpeg_cleanup:
             endif
             widget_control, hourglass=0
         endif
+    end
+;------------------------------------------------------------------------------
+;  Read in a local FITS file.
+;------------------------------------------------------------------------------
+    'ADDFITS': begin
+       delvarx, soar_date
+get_fits:
+;
+;  Set a default opacity based on the number of images already displayed.
+;
+        opacity = 1. / ((sstate.nmapped<1) + 1.)
+        result = sunglobe_get_fits(group_leader=event.top, opacity=opacity, $
+                                   soar_date=soar_date)
+;
+;  If a valid image has been read in, then add it to an image widget base.
+;  Make sure there are enough bases for the new image.
+;
+        if datatype(result) eq 'STC' then begin
+            if n_elements(sstate.wimagebases) eq sstate.nmapped then $
+              sunglobe_add_image_widget, sstate
+;
+;  Start off by moving all the existing widget bases down one step.
+;
+            for i=sstate.nmapped,1,-1 do begin
+                sstate.pimagestates[i] = sstate.pimagestates[i-1]
+                widget_control, sstate.wimagebases[i].wdraw, $
+                  get_value=window
+                wset, window
+                tv, (*sstate.pimagestates[i]).icon, /true
+                widget_control, sstate.wimagebases[i].wlabel, set_value= $
+                  (*sstate.pimagestates[i]).label
+            endfor
+;
+;  Make sure the last widget is mapped, and update the number of mapped bases.
+;
+            widget_control, sstate.wimagebases[sstate.nmapped].base, map=1
+            sstate.nmapped = sstate.nmapped + 1
+;
+;  Put the image that has just been read in into the top widget base.
+;
+            sstate.pimagestates[0] = ptr_new(result)
+            widget_control, sstate.wimagebases[0].wdraw, get_value=window
+            wset, window
+            tv, (*sstate.pimagestates[0]).icon, /true
+            widget_control, sstate.wimagebases[0].wlabel, set_value= $
+              (*sstate.pimagestates[0]).label
+            widget_control, sstate.wimagebases[0].base, map=1
+;
+;  Define the first image to be the selected image.
+;
+            sstate.selected_index = -1
+            sunglobe_selected_image, sstate, 0
+;
+;  Apply differential rotation to the image.
+;
+            sunglobe_diff_rot, sstate, 0
+;
+;  Update the display.
+;
+            sunglobe_display, sstate
+        endif
+    end
+;------------------------------------------------------------------------------
+;  Read in a FITS file from the SOAR archive.
+;------------------------------------------------------------------------------
+    'ADDSOAR': begin
+       soar_date = sstate.target_date
+       goto, get_fits
     end
 ;------------------------------------------------------------------------------
 ;  Handle image selection events.
@@ -766,6 +990,22 @@ jpeg_cleanup:
 ;
         sstate.owindow->draw, sstate.oview
         sunglobe_parse_tmatrix, sstate
+    end
+;------------------------------------------------------------------------------
+;  Adjust image pointing.
+;------------------------------------------------------------------------------
+    'ADJUST': begin
+        text = ['WARNING: Adjusting the pointing is only recommended', $
+                'when the original pointing is clearly incorrect.', '', $
+                'Are you sure you want to adjust the pointing?']
+        if xanswer(text) then begin
+            i0 = sstate.selected_index
+            pimagestate = sstate.pimagestates[i0]
+            sunglobe_adjust_pointing, pimagestate, group_leader=event.top
+            sstate.pimagestates[i0] = pimagestate
+            sunglobe_diff_rot, sstate, i0
+            sunglobe_display, sstate, /hourglass
+        endif
     end
 ;------------------------------------------------------------------------------
 ;  Delete images.
@@ -953,6 +1193,13 @@ jpeg_cleanup:
         endif
     end
 ;------------------------------------------------------------------------------
+;  Handle change SPACECRAFT events here.
+;------------------------------------------------------------------------------
+    'SPACECRAFT': begin
+        sunglobe_change_spacecraft, sstate, group=event.top
+        sunglobe_scpoint, sstate
+    end
+;------------------------------------------------------------------------------
 ;  Handle SAVE events here.
 ;------------------------------------------------------------------------------
     'SAVE': begin
@@ -1002,6 +1249,10 @@ jpeg_cleanup:
                                         set_value=(*sstate.pimagestates[i]).label
                         widget_control, sstate.wimagebases[i].base, map=1
                     end else widget_control, sstate.wimagebases[i].base, map=0
+;
+;  Apply differential rotation to the image.
+;
+                    sunglobe_diff_rot, sstate, i
                 endfor
                 sstate.nmapped = nmapped < n_elements(sstate.pimagestates)
 ;
@@ -1009,10 +1260,6 @@ jpeg_cleanup:
 ;
                 sstate.selected_index = -1
                 sunglobe_selected_image, sstate, 0
-;
-;  Apply differential rotation to the image.
-;
-                sunglobe_diff_rot, sstate, 0
 ;
 ;  Update the display.
 ;

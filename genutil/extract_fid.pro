@@ -1,5 +1,5 @@
 function extract_fid, filenames, times=times, fidfound=fidfound, $
-		      notime=notime, pattern=pattern
+		      notime=notime, pattern=pattern, quiet=quiet
 ;+
 ;   Name: extract_fid 
 ;
@@ -20,7 +20,8 @@ function extract_fid, filenames, times=times, fidfound=fidfound, $
 ;      notime (input) - switch used by FILE2TIME to bypass time conversion
 ;      pattern (input) - passed to EXTRACT_FIDS
 ;                        date string template
-;                        EX: 'yymmdd.hhmmss', 'yyyymmdd', 'yyyymmdd_hhmm'  
+;                        EX: 'yymmdd.hhmmss', 'yyyymmdd', 'yyyymmdd_hhmm'
+;      quiet           - if set, be quiet  
 ;  
 ;   History:
 ;      16-nov-1995 (S.L.Freeland)
@@ -31,7 +32,10 @@ function extract_fid, filenames, times=times, fidfound=fidfound, $
 ;                          Removes restriction on using a fixed length for
 ;                          a given call  
 ;      21-apr-1998 (RAS) - vectorize selection of null extensions
+;      04-Jun-2020 (Kim Tolbert) - Added quiet keyword
 ;-
+
+quiet = keyword_set(quiet)
 
 break_file, filenames, flog, fpath, fname, fext, fver
 wnull = where( fext eq '', nnull)
@@ -44,7 +48,7 @@ fids=extract_fids(full_files, fidfound=fidfound, pattern=pattern)   ; call optim
 if fidfound then begin
    if not keyword_set(notime) then times=file2time(fids,out_style='yohkoh')
 endif else begin
-   box_message,'Could not find FIDs in all files'
+   if ~quiet then box_message,'Could not find FIDs in all files'
    fids=full_files
 endelse
 if n_elements(fids) eq 1 then fids=fids(0)

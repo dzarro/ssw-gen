@@ -212,6 +212,12 @@
 ;                - made PORT a long variable
 ;                9-Oct-2018, Zarro (ADNET)
 ;                - added error check to POST return
+;                17-Nov-2018, Zarro (ADNET)
+;                - added check for password without username
+;                3-March-2019, Zarro (ADNET) 
+;                - added redirect to IDLnetURL for SSL
+;                18-January-2020, S. Haugan (UiO)
+;                - adding Host: header for http 1.0, not just >= 1.1
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
@@ -369,14 +375,16 @@ endif
 port=self->hget(/port)
 port=trim(port)
 host='Host: '+server+':'+port
-if protocol eq 1.1 then header=[header,host]
+header=[header,host]
 
 ;-- encode usename/password 
 
 username=self->hget(/username)
 password=self->hget(/password)
-if is_string(username) && is_string(password) then begin
- auth=username+':'+password
+
+if is_string(username) then begin
+ auth=username
+ if is_string(password) then auth=username+':'+password
  bauth=idl_base64(byte(auth))
  bhead='Authorization: Basic '+bauth
  header=[header,bhead]
@@ -694,9 +702,12 @@ if is_string(response) && n_params() eq 1  then print,response
 return & end
 
 ;------------------------------------------------------------------------
+;-- check for IDLnetURL redirect
 
-function http::use_network,url,_extra=extra
+function http::use_network,url,_extra=extra,verbose=verbose
 
+verbose=keyword_set(verbose)
+if ~is_url(url,_extra=extra,verbose=verbose) then return,0b
 val=try_network()
 if val gt 0 then begin
  if val eq 2 then url=url_fix(url,/secure)
@@ -705,23 +716,26 @@ endif
 
 ;-- use IDLnetURL object if FTP 
 
-use_network=is_ftp(url)
-if use_network && self.debug then mprint,'Redirecting to IDLnetURL.'
+use_network=is_ftp(url)  
+if use_network && verbose then mprint,'Redirecting to IDLnetURL.'
 
 return,use_network
+
 end
- 
 ;---------------------------------------------------------------------------
 ;--- send HEAD request to determine server response
 
 pro http::head,url,response,_ref_extra=extra,err=err
+
+err=''
+response=''
+if ~self->check_ssl(url,err=err) then return
 
 if self->use_network(url,_extra=extra) then begin
  response=sock_head(url,err=err,_extra=extra)
  return
 endif
 
-response=''
 self->send_request,url,/head,_extra=extra,err=err
 if is_string(err) then begin
  self->close
@@ -788,7 +802,7 @@ endif
 if self->use_network(url,_extra=extra) then begin
  output=sock_post(url,content,_extra=extra,err=err,response_header=response_header)
 endif else begin
- self->list,url,output,post=content,_extra=extra,/no_check,err=err,response_header=response_header
+ self->print,url,output,post=content,_extra=extra,/no_check,err=err,response_header=response_header
  sock_content,response_header,code=code
  if code ne 200 then begin
   err=response_header
@@ -799,14 +813,26 @@ endelse
 
 return & end
 
-;----------------------------------------------------------------------------
+;--------------------------------------------------------------------------
+;-- check if SSL
 
+function http::check_ssl,url,err=err
+if is_ssl(url) then begin
+ err='HTTP socket currently does not support HTTPS/SSL.'
+ mprint,err
+ return,0b
+endif
+return,1b & end
+
+;----------------------------------------------------------------------------
 pro http::check,url,err=err,_ref_extra=extra
 
 err='' 
+if ~self->check_ssl(url,err=err) then return
+ 
 self->head,url,response,err=err,_extra=extra
 if is_string(err) then begin
-; mprint,err
+ mprint,err
  return
 endif
  
@@ -824,35 +850,51 @@ if ~is_number(code) then code='404'
 scode=strtrim(code,2)
 nok=stregex(scode,'^(4|5)',/bool)
 if nok then begin
- err='URL not accessible. Status code = '+trim(code)
+ err='This URL not accessible. Status code = '+trim(code)
  mprint,err
- if is_string(url) then print,url
+ if is_string(url) then mprint,url
  return,0b
 endif
 
 return,1b & end
 
 ;---------------------------------------------------------------------------
-;--- list text file from server
+;--- list HTML file from server
 
-pro http::list,url,output,err=err,_ref_extra=extra,response_header=header,$
+pro http::list,url,output,_ref_extra=extra
+
+output=''
+if ~is_url(url,/verbose,_extra=extra) then return
+use_network=self->use_network(url,_extra=extra)
+
+if n_params() eq 1 then begin
+ if use_network then $
+  sock_list,url,_extra=extra else $
+   self->print,url,_extra=extra
+endif else begin
+ if use_network then $
+  sock_list,url,output,_extra=extra else $
+   self->print,url,output,_extra=extra
+endelse
+
+return & end
+
+;--------------------------------------------------------------------------
+
+pro http::print,url,output,err=err,_ref_extra=extra,response_header=header,$
            verbose=verbose,no_check=no_check,buffer=buffer
 
-if self->use_network(url,_extra=extra) then begin
- sock_list,url,output,err=err,verbose=verbose,buffer=buffer,$
-               response_header=header,no_check=no_check,_extra=extra
- return
-endif
+output=''
+if ~is_url(url,/verbose,err=err) then return
 
 verbose=keyword_set(verbose)
 err=''
 if is_blank(url) || (n_elements(url) ne 1) then url='/'
 
-output=''
 self->url_parse,url,server,query=query
 
 if is_blank(server) then begin
- err='Missing remote server name'
+ err='Missing remote server name.'
  mprint,err
  return
 endif
@@ -861,12 +903,12 @@ endif
 
 durl=url
 if ~keyword_set(no_check) && is_blank(query) then begin
- self->check,durl,err=err,location=location,_extra=extra
+ self->check,durl,err=err,location=location,verbose=verbose,_extra=extra
  if is_string(err) then return
  if is_url(location,/scheme) then begin
-  if verbose then mprint,'Redirecting to '+durl
+  if verbose then mprint,'Redirecting to '+location
   durl=location
-  self->check,durl,err=err,_extra=extra
+  self->check,durl,err=err,_extra=extra,verbose=verbose
   if is_string(err) then return
  endif
 endif
@@ -877,7 +919,7 @@ if is_string(err) then goto,bail
 self->read_response,header,err=err,_extra=extra
 if is_string(err) then goto,bail
 
-sock_content,header,chunked=chunked,size=rsize
+sock_content,header,chunked=chunked,size=rsize,code=code
 if chunked && verbose then mprint,'Reading chunked-encoded data...'
 
 sock_readu,self.unit,output,maxsize=rsize,chunked=chunked,ascii=~keyword_set(buffer),err=err,debug=self.debug,_extra=extra
@@ -885,6 +927,9 @@ sock_readu,self.unit,output,maxsize=rsize,chunked=chunked,ascii=~keyword_set(buf
 bail: 
 
 self->close
+if is_number(code) then scode=strmid(strtrim(code,2),0,1) else scode='2'
+
+if (n_params() eq 1) || is_string(err) || (scode ne '2') then if is_string(output) then print,output
 
 return & end
 
@@ -1013,8 +1058,12 @@ return & end
 
 pro http::copy,url,new_name,_ref_extra=extra
 
-if self->use_network(url,_extra=extra) then sock_get,url,new_name,_extra=extra else $
- self->get,url,new_name,_extra=extra
+if ~is_url(url,/verbose,_extra=extra) then return
+use_network=self->use_network(url,_extra=extra)
+
+if use_network then $
+ sock_get,url,new_name,_extra=extra else $
+  self->get,url,new_name,_extra=extra
 
 return & end
 
@@ -1061,7 +1110,9 @@ osize=0l
 ;-- send HEAD request to check for redirect (except for queries)
 
 durl=url
-if ~keyword_set(no_check) && is_blank(query) then begin
+pre_check=~keyword_set(no_check) ; && is_blank(query)
+
+if pre_check then begin
  self->check,durl,err=err,location=location,_extra=extra
  if is_string(err) then return
 
@@ -1125,7 +1176,7 @@ osize=chk.size
 newer_file=1b
 if valid_time(rdate) && have_file then begin
  local_time=anytim(file_time(ofile))
- remote_time=anytim(rdate)+ut_diff(/sec)
+ remote_time=anytim(rdate)
  dprint,'% Remote file time: ',anytim(remote_time,/vms)
  dprint,'% Local file time: ',anytim(local_time,/vms)
  newer_file=remote_time gt local_time
@@ -1199,10 +1250,7 @@ file_chmod,ofile,/a_write,/a_read
 
 ;-- update local time of file to same time as server version
 
-if valid_time(rdate) then begin
- local_time=anytim(anytim(rdate)+ut_diff(/sec),/vms)
- file_touch,ofile,local_time
-endif
+if valid_time(rdate) then file_touch,ofile,rdate
 
 local_file=ofile
 

@@ -47,6 +47,9 @@
 ;
 ;               FACTOR  = Returns the conversion factor between data and meters
 ;
+;               NOMASK  = If set, then don't mask off pixels obscured by
+;                         solar disk.
+;
 ; Calls       :	WCS_CONV_FIND_DSUN, FLAG_MISSING, WCS_CONV_HPC_HPR
 ;
 ; Common      :	None.
@@ -60,6 +63,7 @@
 ; History     :	Version 1, 10-Dec-2008, William Thompson, GSFC
 ;               Version 2, 11-Nov-2010, WTT, fix bug masked points behind Sun
 ;               Version 3, 09-Dec-2011, WTT, updated header.
+;               Version 4, 07-Apr-2020, WTT, add NOMASK to header
 ;
 ; Contact     :	WTHOMPSON
 ;-

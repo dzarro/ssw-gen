@@ -2,7 +2,6 @@ PRO AMOEBA_C,X,Y,FNAME,PARAM,ACCURACY=ACCURACY,MAX_ITER=MAX_ITER, $
   POISSON=POISSON,ERROR=ERR,LAMBDA=LAMBDA0,CHISQR=CHISQR,	$
   N_ITER=ITER,NOPRINT=NOPRINT,ABSOLUTE=ABSOLUTE,LORENTZ=LORENTZ,$
   PRANGE=K_PRANGE
-
 ;+
 ; Project     :	SOHO - CDS
 ;
@@ -115,8 +114,14 @@ PRO AMOEBA_C,X,Y,FNAME,PARAM,ACCURACY=ACCURACY,MAX_ITER=MAX_ITER, $
 ;       insert into the indices of non-fixed variables (in W_PR array). 
 ;     Used ^C-Shift-F in IDLDE eclipse interface to format blocks nicely. 
 ;     Fixed typo where fname was called with PRR instead of PR (in 'Nothing seems to help' block).
+;   Version 10.1, Kim Tolbert. 8-Nov-2021. Fix change of 25-Jul-2017. I had assumed prange was always set
+;     to something (dumb), and therefore pr_count was > 0, and w_pr were indices of params being fit. Now
+;     set PR and PRR as though all indices are being fit, and then set indices that are fixed (W_FIX) to their
+;     original value.
+;   Version 11, William Thompson, 1-Dec-2021, additional code to ensure fixed parameters don't change.
+;   Version 12, William Thompson, 14-Jan-2022, make ITER long integer
 ;
-; Version     :	Version 10, 15-Jul-2017
+; Version     :	Version 11, 1-Dec-2021
 ;-
 
   ON_ERROR,2
@@ -147,7 +152,7 @@ PRO AMOEBA_C,X,Y,FNAME,PARAM,ACCURACY=ACCURACY,MAX_ITER=MAX_ITER, $
   NDATA = N_ELEMENTS(X) < N_ELEMENTS(Y)
   NPAR = N_ELEMENTS(PARAM)
   IF NPAR EQ 1 THEN PARAM = MAKE_ARRAY(PARAM)
-  ITER = 0
+  ITER = 0L
   ;
   ;  Calculate the sigmas to use for each data point.
   ;
@@ -179,15 +184,23 @@ PRO AMOEBA_C,X,Y,FNAME,PARAM,ACCURACY=ACCURACY,MAX_ITER=MAX_ITER, $
   ;
   ;  Determine the allowed parameter range, and make sure that all the parameters
   ;  are within that range.
-  ;
+  ;  PR_COUNT is the number of params that have a valid prange (and min ne max prange)
+  ;  W_PR are the indices of params being fit
+  ;  N_FIX is the number of params that are fixed (min eq max prange)
+  ;  W_FIX are the indices of params that are fixed
   PR_COUNT = 0
+  N_FIX = 0
   SZ = SIZE(K_PRANGE)
   IF SZ[0] EQ 2 THEN IF (SZ[1] EQ NPAR) AND (SZ[2] EQ 2) THEN BEGIN
     PRANGE=K_PRANGE
-    W_PR = WHERE(PRANGE[*,1] GT PRANGE[*,0], PR_COUNT)
+    W_PR = WHERE(PRANGE[*,1] GT PRANGE[*,0], PR_COUNT, COMPL=W_FIX, NCOMPL=N_FIX)
     IF PR_COUNT GT 0 THEN FOR I = 0,PR_COUNT-1 DO BEGIN
       J = W_PR[I]
       P[J,*] = PRANGE[J,0] > P[J,*] < PRANGE[J,1]
+    ENDFOR
+    IF N_FIX GT 0 then FOR I=0,N_FIX-1 DO BEGIN
+      J = W_FIX[I]
+      P[J,*] = PARAM[J]         ;Set fixed values back to original.
     ENDFOR
   ENDIF
   ;
@@ -237,20 +250,20 @@ PRO AMOEBA_C,X,Y,FNAME,PARAM,ACCURACY=ACCURACY,MAX_ITER=MAX_ITER, $
   ;
   ;  Reflect from the high point through PBAR.
   ;
-  PR = P[*,0]
-  IF PR_COUNT GT 0 THEN PR[W_PR] = 2*PBAR[W_PR] - P[W_PR,IHI]
-  IF PR_COUNT GT 0 THEN PR[W_PR] =	$
+  PR = 2*PBAR - P[*,IHI]
+  IF PR_COUNT GT 0 THEN PR[W_PR] =  $
     PRANGE[W_PR,0] > PR[W_PR] < PRANGE[W_PR,1]
+  IF N_FIX GT 0 THEN PR[W_FIX] = P[W_FIX,0]  ; set fixed params back to original value
   F = CALL_FUNCTION(FNAME,X,PR)
   CR = FORM_CHISQR( (F - Y)/SIG, ABSOLUTE=ABSOLUTE, LORENTZ=LORENTZ)
   ;
   ;  If an improvement was achieved, try an additional extrapolation.
   ;
   IF CR LE CHI[ILO] THEN BEGIN
-    PRR = P[*,0]
-    IF PR_COUNT GT 0 THEN PRR[W_PR] = 2*PR[W_PR] - PBAR[W_PR]
-    IF PR_COUNT GT 0 THEN PRR[W_PR] =	$
+    PRR = 2*PR - PBAR
+    IF PR_COUNT GT 0 THEN PRR[W_PR] = $
       PRANGE[W_PR,0] > PRR[W_PR] < PRANGE[W_PR,1]
+    IF N_FIX GT 0 THEN PRR[W_FIX] = P[W_FIX,0]
     F = CALL_FUNCTION(FNAME,X,PRR)
     CRR = FORM_CHISQR( (F - Y)/SIG, ABSOLUTE=ABSOLUTE,	$
       LORENTZ=LORENTZ)
@@ -279,10 +292,10 @@ PRO AMOEBA_C,X,Y,FNAME,PARAM,ACCURACY=ACCURACY,MAX_ITER=MAX_ITER, $
     ;
     ;  Look for an intermediate lower point.  If it's an improvement use it.
     ;
-    PRR = P[*,0]
-    IF PR_COUNT GT 0 THEN PRR[W_PR] = (P[W_PR,IHI] + PBAR[W_PR]) / 2.
-    IF PR_COUNT GT 0 THEN PRR[W_PR] =	$
+    PRR = (P[*,IHI] + PBAR) / 2.
+    IF PR_COUNT GT 0 THEN PRR[W_PR] = $
       PRANGE[W_PR,0] > PRR[W_PR] < PRANGE[W_PR,1]
+    IF N_FIX GT 0 THEN PRR[W_FIX] = P[W_FIX,0]    ; set fixed params back to original value
     F = CALL_FUNCTION(FNAME,X,PRR)
     CRR = FORM_CHISQR( (F - Y)/SIG, ABSOLUTE=ABSOLUTE,	$
       LORENTZ=LORENTZ)
@@ -294,8 +307,8 @@ PRO AMOEBA_C,X,Y,FNAME,PARAM,ACCURACY=ACCURACY,MAX_ITER=MAX_ITER, $
       ;
     END ELSE BEGIN
       FOR I = 0,NPAR DO IF I NE ILO THEN BEGIN
-        PR = P[*,0]
-        IF PR_COUNT GT 0 THEN PR[W_PR] = (P[W_PR,I] + P[W_PR,ILO]) / 2.
+        PR = (P[*,I] + P[*,ILO]) / 2.
+        IF N_FIX GT 0 THEN PR[W_FIX] = P[W_FIX,0]    ; set fixed params back to original value
         P[0,I] = PR
         F = CALL_FUNCTION(FNAME,X,PR)  ; Kim changed from PRR, 7/25/2017 (typo?)
         CHI[I] = FORM_CHISQR( (F - Y)/SIG,	$

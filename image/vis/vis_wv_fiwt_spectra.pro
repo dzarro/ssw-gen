@@ -1,66 +1,35 @@
-function vis_wv_repmat, M0, nc, nr
+function vis_wv_distance, Omega, n
 
-  M = M0
-  y = 1
-  n = max([nc,nr])
-  sm = size(M)
+  if ~(n mod 2) then begin
+    xi_x = findgen(n)/n*2*Omega - Omega
+    xi_y = reverse(xi_x,1)
 
-  if sm[0] eq 0 then begin
-    mx = 1
-    my = 1
+    r = dblarr(n, n)
+    for i=0, n-1 do begin
+      for j = 0, n-1 do begin
+
+        r[i, j] = sqrt(xi_x[i]^2. + xi_y[n-1-j]^2.)
+
+      endfor
+    endfor
+
   endif else begin
-    if sm[0] eq 1 then begin
-      mx = sm[1]
-      my = 1
-    endif else begin
-      mx = sm[1]
-      my = sm[2]
-    endelse
+
+    xi_x = findgen(n)/(n-1)*2*Omega - Omega
+    xi_y = reverse(xi_x,1)
+
+    r = dblarr(n, n)
+    for i=0, n-1 do begin
+      for j = 0, n-1 do begin
+
+        r[i, j] = sqrt(xi_x[i]^2. + xi_y[j]^2.)
+
+      endfor
+    endfor
+
   endelse
 
-  while y lt n do begin
-    y = y*2
-    sm = size(M)
-    if sm[0] eq 0 then begin
-      smx = 1
-      smy = 1
-    endif else begin
-      if sm[0] eq 1 then begin
-        smx = sm[1]
-        smy = 1
-      endif else begin
-        smx = sm[1]
-        smy = sm[2]
-      endelse
-    endelse
-    M2 = make_array(2*smx,2*smy)
-    M2[0:smx-1,0:smy-1] = M
-    M2[smx:2*smx-1,0:smy-1] = M
-    M2[0:smx-1,smy:2*smy-1] = M
-    M2[smx:2*smx-1,smy:2*smy-1] = M
-    M = M2
-  endwhile
-
-  M = M[0:nc*mx-1,0:nr*my-1]
-  return, M
-
-end
-
-
-pro vis_wv_meshgrid, x, y, x2, y2
-  lx = n_elements(x)
-  ly = n_elements(y)
-  x2 = vis_wv_repmat(x,1,ly)
-  y2 = vis_wv_repmat(transpose(y),lx,1)
-end
-
-function vis_wv_linspace, base, limit, n
-  ; Provides a row vector V with N linearly spaced elements between BASE and LIMIT;
-  ; V = linspace(BASE, LIMIT, N)
-
-  v = base + findgen(n)*(limit-base)/(n-1)
-  return,  v
-
+  return, r
 end
 
 function vis_wv_meyeraux, x
@@ -105,11 +74,12 @@ end
 ;   vis_wv_fiwt_spectra
 ;
 ; PURPOSE:
-;   This calculates the 2D Meyer spectra to be used in the finite isotropic wavelet transform
+;   This function computes the 2D Meyer spectra to be used in the finite isotropic wavelet transform
 ;
 ; INPUTS:
-;   n: size of the input image (must be square)
-;   nscales: number of scales that will be used in the wavelet decomposition, Default set to 3
+;   n: size of the input image (it must be square)
+;   nscales: number of scales that will be used in the wavelet decomposition (default set to 3)
+;   pixel_size: pixel size in arcsec (default is 1)
 ;
 ; RETURNS:
 ;   A 3D matrix of wavelet values in the frenquency domain of size [nscales+1, n, n]
@@ -117,39 +87,42 @@ end
 ; HISTORY:
 ;   May-2017 Written by Miguel A. Duval-Poo
 ;   01-Nov-2017, Kim. Changed FIVE_CS to VIS_WV
+;   12-Feb-2019, P. Massa 
+;                - replaced the functions 'vis_wv_repmat', 'vis_wv_meshgrid' and 'vis_wv_linspace' with 
+;                  'vis_wv_distance' in order to reduce the computational cost;
+;                - added the pixel size as input;
+;                - rescaled the size of the Fourier domain by the pixel size.
 ;
 ; CONTACT:
+;   massa.p  [at] dima.unige.it
 ;   duvalpoo [at] dima.unige.it
 ;
 ;-
-function vis_wv_fiwt_spectra, n, nscales
+function vis_wv_fiwt_spectra, n, nscales, pixel_size 
 
-  default, n, 128
+  default, n, 129
   default, nscales, 3
+  default, pixel_size, 1
 
-  ; for better symmetrie each n should be odd
+  ; n must be odd
   n_orig = n
   n_new = n + (1-(n mod 2))
 
-  ; create meshgrid
   ; largest value where psi_1 is equal to 1
   ; assuming that a = 2^-j
-  X = 2.^(nscales-1)
-  xi_x_init = vis_wv_linspace(0,X,(n_new+1)/2)
-  xi_x_init = [-reverse(xi_x_init[1:n_elements(xi_x_init)-1],1), xi_x_init]
-  vis_wv_meshgrid, xi_x_init, reverse(xi_x_init,1), xi_x, xi_y
+  X = 2.^(nscales-1)/pixel_size
+  dist = vis_wv_distance(X, n_new)
 
   ; init
   psi = replicate(0.,nscales+1,n_new,n_new)
 
   ; lowpass
-  psi[0,*,*] = vis_wv_meyer_scaling(sqrt(xi_x^2+xi_y^2))
+  psi[0,*,*] = vis_wv_meyer_scaling(dist)
 
   ; loop for each scale
   for j = 0,nscales-1 do begin
     a = 2.^(-j)
-    ax = a*sqrt((xi_x)^2 + (xi_y)^2)
-    psi[j+1,*,*] = vis_wv_meyer_wavelet(ax)
+    psi[j+1,*,*] = vis_wv_meyer_wavelet(a*dist)
   endfor
 
   ; generate output with size n

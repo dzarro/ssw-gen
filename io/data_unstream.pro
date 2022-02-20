@@ -29,13 +29,13 @@ dtype=size(sdata,/type)
 if (dtype ne 1) || (n_elements(sdata) le 1) then begin
  err='Input data stream must be in byte array format.'
  mprint,err
- return,!null
+ return,null()
 endif
 
 if ~is_number(type) then begin
  err='Need data type for output.'
  mprint,err
- return,!null
+ return,null()
 endif
 
 ;-- set a catch for errors
@@ -47,7 +47,7 @@ if (error ne 0) then begin
  err=err_state()
  mprint,'Called from '+get_caller()
  mprint,err
- return,!null
+ return,null()
 endif
 
 if keyword_set(no_copy) then temp=temporary(sdata) else temp=sdata
@@ -74,7 +74,7 @@ endif
 if n_elements(temp) eq 1 then begin
  err='Input data must be array.'
  mprint,err
- return,!null
+ return,null()
 endif
 
 if type eq 7 then dtype=1 else dtype=type

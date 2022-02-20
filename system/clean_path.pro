@@ -37,6 +37,7 @@
 ;               19-Feb-16 - Zarro (ADNET) - removed IDL obsolete from
 ;                           !path
 ;               17-Jan-17 - Zarro (ADNET) - added _ref_extra
+;                1-Dec-19 - Zarro (ADNET) - changed order of IDL libs
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
@@ -81,6 +82,7 @@ if keyword_set(reset) then begin
  return
 endif else begin
  if ~exist(orig_path) then orig_path=!path
+ rsi=file_dirname(chklog('$IDL_DIR'))
 endelse
 
 libs=get_lib()
@@ -108,6 +110,10 @@ check_idl_path,'/lib/obsolete',libs,obs_libs
 check_idl_path,'/lib/imsl',libs,obs_libs
 
 check_idl_path,rsi,libs,rsi_libs
+if n_elements(rsi_libs) gt 1 then begin
+ i=sort(rsi_libs)
+ rsi_libs=rsi_libs[i]
+endif
 check_idl_path,'$SSW/site',libs,site_libs
 check_idl_path,'$SSW/spartan',libs,spart_libs
 check_idl_path,'$SSW/sdo',libs,sdo_libs
@@ -156,8 +162,8 @@ if keep_current then begin
 endif else cd,get_temp_dir()
 
 if exist(gen_libs) then libs=[libs,gen_libs]
-if exist(rsi_libs) then libs=[libs,rsi_libs]
 if exist(astro_libs) then libs=[libs,astro_libs]
+if exist(rsi_libs) then libs=[libs,rsi_libs]
 if exist(sdo_libs) then libs=[libs,sdo_libs]
 if exist(vobs_libs) then libs=[libs,vobs_libs]
 if exist(stereo_libs) then libs=[libs,stereo_libs]

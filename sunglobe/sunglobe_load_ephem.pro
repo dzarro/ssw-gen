@@ -48,7 +48,8 @@
 ;                                            check if SunSPICE is loaded
 ;               Version 5, 28-Jul-2017, WTT, check for LOAD_SUNSPICE_SOLO
 ;                                            call ADD_SUNSPICE_MISSION
-;                                            Use February Ephemeris
+;                                            Use February ephemeris
+;               Version 6, 10-Apr-2019, WTT, Use Feb 2020 ephemeris
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -68,7 +69,7 @@ if (spacecraft eq '-144') and (temp eq '') then begin
 ;
 ;  Check to see if the Orbiter ephemeris has already been loaded.
 ;
-    filename = find_with_def('2019_February_In_CReMA_Issue4-0.bsp', !path)
+    filename = find_with_def('2020_February_In_CReMA_Issue4-0.bsp', !path)
     list_sunspice_kernels, kernels=kernels, /quiet
     if n_elements(kernels) gt 0 then w=where(kernels eq filename, count) else $
       count=0

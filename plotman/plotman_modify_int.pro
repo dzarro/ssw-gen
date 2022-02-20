@@ -6,6 +6,9 @@
 ;    intervals and any intervals whose start=end, and if data_bound is set, force intervals
 ;    to xaxis boundaries
 ;  23-Apr-2008, Kim. Added n_elements(se) eq 1 check for appending new_se to se
+;  31_mar_2020, Kim. Breaking into N equal intervals in log space didn't work for times - numbers are too big,
+;    so made times relative to 1 sec before first time, did math, then added that base time back in.
+
 pro plotman_modify_int, what, int_info, int_index=int_index, nbreak=nbreak, lbreak=lbreak, $
 	ndata=ndata, ntotalbreak=ntotalbreak, startint=startint, nosort=nosort, data_bound=data_bound, $
 	error=error
@@ -78,10 +81,17 @@ case what of
 		if not exist (int_index) then return
 		if not keyword_set (nbreak) then return
 		orig_se = se[*,int_index]
+		; If numbers are too big (times since 79/1/1), make relative to a base value which is first value - 1. 
+		; (-1 since orig_se[0] can't be 0.).  Then add that base value back in.
+		make_rel = (orig_se[0] gt 1.d6)
+		if make_rel then begin
+		  se_base = orig_se[0] - 1.d0
+		  orig_se = orig_se - se_base
+		endif else se_base = 0.
 		plotman_modify_int, 'delete', int_info, int_index=int_index
 		len = (alog10(orig_se[1]) - alog10(orig_se[0])) / nbreak
 		for i = 0,nbreak-1 do begin
-			int_info.new_se = 10. ^ ([ alog10(orig_se[0]) + (i*len), alog10(orig_se[0]) + ((i+1)*len) ])
+			int_info.new_se = 10. ^ ([ alog10(orig_se[0]) + (i*len), alog10(orig_se[0]) + ((i+1)*len) ]) + se_base
 			plotman_modify_int, 'add', int_info, error=error, data_bound=data_bound
 			if error then goto, endloop
 		endfor

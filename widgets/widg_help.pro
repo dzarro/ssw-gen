@@ -89,6 +89,7 @@
 ;               TFONT        = Font name for the topic list widget. If
 ;                              not passed, the topic list font is determined
 ;                              by GET_DFONT
+;               NOFONT       = Don't call GET_DFONT.
 ;               SEP_CHAR     = Character used to differentiate topic
 ;                              headers. The default SEP_CHAR is '!'
 ;               MODAL        = Block event processing in calling widget.
@@ -160,7 +161,10 @@
 ;                          Added check for undefined !debug
 ;               Version 11, William Thompson, GSFC, 14-Jan-2016
 ;                          Added NO_BLOCK keyword
-;
+;               Version 12, William Thompson, GSFC, 14-Jan-2019
+;                          Added keyword NOFONT to skip GET_DFONT.
+;               Version 13, William Thompson, GSFC, 7-Jan-2020
+;                          Move MODAL, GROUP to WIDGET_BASE call
 ;-
 ;
 
@@ -261,7 +265,7 @@ END
 PRO WIDG_HELP, FILENAME, GROUP_LEADER=GROUP, TITLE=TITLE, FONT=FONT,$
                SEP_CHAR=SEP_CHAR, MODAL=MODAL, SUBTOPIC=SUBTOPIC, $
                TFONT=TFONT, XTEXTSIZE=XTEXTSIZE, HIERARCHY=HIERARCHY,$
-               XTOPICSIZE=XTOPICSIZE, NO_BLOCK=NO_BLOCK
+               XTOPICSIZE=XTOPICSIZE, NO_BLOCK=NO_BLOCK, NOFONT=NOFONT
         COMMON WIDG_HELP_COMMON,common_filename,base
 ;
 ;  Define the error status.
@@ -292,8 +296,10 @@ PRO WIDG_HELP, FILENAME, GROUP_LEADER=GROUP, TITLE=TITLE, FONT=FONT,$
 ;
 ;  Set font for text and topic list widgets
 ;
-        IF datatype(font) NE 'STR' THEN font = (get_dfont(wfont))(0)
-        IF datatype(tfont) NE 'STR' THEN tfont = (get_dfont(wfont))(0)
+        IF NOT KEYWORD_SET(NOFONT) THEN BEGIN
+            IF datatype(font) NE 'STR' THEN font = (get_dfont(wfont))(0)
+            IF datatype(tfont) NE 'STR' THEN tfont = (get_dfont(wfont))(0)
+        ENDIF
 ;
 ;  See if SEP_CHAR is passed
 ;
@@ -349,7 +355,8 @@ PRO WIDG_HELP, FILENAME, GROUP_LEADER=GROUP, TITLE=TITLE, FONT=FONT,$
 ;
 	IF N_ELEMENTS(TITLE) EQ 1 THEN WIDGET_TITLE = TITLE ELSE	$
 		WIDGET_TITLE = 'Widget Help'
-	BASE = WIDGET_BASE(TITLE=WIDGET_TITLE, /ROW, SPACE=20)
+        BASE = WIDGET_BASE(TITLE=WIDGET_TITLE, /ROW, SPACE=20, $
+                          GROUP_LEADER=GROUP, MODAL=MODAL)
 ;
 ;  Create the quit button and the list of help topics.
 ;
@@ -395,8 +402,7 @@ PRO WIDG_HELP, FILENAME, GROUP_LEADER=GROUP, TITLE=TITLE, FONT=FONT,$
 ;
 ;  Start the widget.
 ;
-        XMANAGER, 'widg_help', BASE, GROUP_LEADER=GROUP, $
-           MODAL=KEYWORD_SET(MODAL), NO_BLOCK=NO_BLOCK
+        XMANAGER, 'widg_help', BASE, GROUP_LEADER=GROUP, NO_BLOCK=NO_BLOCK
 ;
 	RETURN
 	END

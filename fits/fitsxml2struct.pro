@@ -52,6 +52,8 @@
 ;
 ; History     :	Version 1, 16-Nov-2015, William Thompson, GSFC
 ;               Version 2, 08-Dec-2015, WTT, rewrote to not depend on ^J
+;               Version 3, 12-Apr-2021, WTT, ignore CONTINUE tags to avoid
+;                                            mangled FITS headers.
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -99,9 +101,9 @@ while strlen(fitsxml) gt 0 do begin
     nchar = valuelen + taglen + 3
     fitsxml = strmid(fitsxml, nchar, strlen(fitsxml)-nchar)
 ;
-;  Ignore the SIMPLE tag.
+;  Ignore the SIMPLE tag, as well as any CONTINUE tags.
 ;
-    if tag ne 'SIMPLE' then begin
+    if (tag ne 'SIMPLE') and (tag ne 'CONTINUE') then begin
 ;
 ;  Check whether the value constitutes a valid number.  If it is, decide
 ;  whether it's a single or double-precision floating point number.

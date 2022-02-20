@@ -89,6 +89,8 @@
 ; History     :	Version 1, 12-Oct-2006, William Thompson, GSFC
 ;               Version 2, 12-Jan-2007, William Thompson, GSFC
 ;                       Corrected bug with occasional array size mismatch
+;               Version 3, 19-Jan-2021, William Thompson, GSFC
+;                       Handle arrays with NaN
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -143,7 +145,7 @@ atempy = arrayy[w]
 ;
 ;  Get the maximum and minimum values of ARRAYX.
 ;
-ax_max = 1.*max(atempx, min=ax_min)
+ax_max = 1.*max(atempx, min=ax_min, /nan)
 ax_min = 1.*ax_min
 if ax_max eq ax_min then begin
     message = 'No histogram generated--all elements equal to ' + trim(ax_max)
@@ -158,7 +160,7 @@ endif
 ;
 ;  Get the maximum and minimum values of ARRAYY.
 ;
-ay_max = 1.*max(atempy, min=ay_min)
+ay_max = 1.*max(atempy, min=ay_min, /nan)
 ay_min = 1.*ay_min
 if ay_max eq ay_min then begin
     message = 'No histogram generated--all elements equal to ' + trim(ay_max)

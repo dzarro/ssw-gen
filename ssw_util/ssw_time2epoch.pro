@@ -19,6 +19,7 @@ function ssw_time2epoch, sswtimes, epoch_starts, epoch_stops, $
 ;
 ;   History:
 ;      23-oct-2007 - S.L.Freeland 
+;      23-jun-2011 - S.L.Freeland - force single epoch membership
 ;
 ;   Method:
 ;      vectorized version of index in {timerange0, timerange2, timerange3...}
@@ -50,7 +51,7 @@ itimes=anytim(sswtimes)  ; all values=anytim
 neps=n_elements(estart)
 
 for e=0,neps-1 do begin 
-   epoch=epoch +  (e+1)*(itimes ge estart(e) and itimes le estop(e)) 
+   epoch=epoch +  ((e+1)*(itimes ge estart(e) and itimes le estop(e)) * (epoch eq -1))
 endfor
 
 retval=epoch

@@ -28,6 +28,8 @@
 ;                - sped up with caching 
 ;               29-Dec-2014, Zarro (ADNET) 
 ;                - cleaned up; removed caching
+;               10-June-2019, Zarro (ADNET)
+;                - initialized OUT
 ;               
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
@@ -37,8 +39,10 @@ pro espawn,cmd,out,_ref_extra=extra
 windows=os_family(/lower) eq 'windows'
 
 if arg_present(out) then begin
+ out=''
  if windows then win_spawn,cmd,out,_extra=extra else unix_spawn,cmd,out,_extra=extra
 endif else begin
+ out=''
  if windows then win_spawn,cmd,_extra=extra else unix_spawn,cmd,_extra=extra
 endelse
 

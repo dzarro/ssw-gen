@@ -6,11 +6,13 @@ pro sswdb_upgrade, relsets, _extra=_extra,             $
 		 local_sets=local_sets, remote_sets=remote_sets, $
 		 debug=debug, spawnit=spawnit, $
 		 loud=loud, verbose=verbose, result=result, $
-		 user=user, group=group, mirror=mirror, local_mirror=local_mirror
+		 user=user, group=group, mirror=mirror, local_mirror=local_mirror, $
+                 wget=wget,lmsal=lmsal, clean_wget=clean_wget, noclean_wget=noclean_wget,$
+                 cmds_wget=cmds_wget, remote_urls=remote_urls, local_paths=local_paths
 ;+
 ; Name: sswdb_upgrade
 ;
-; Purpose: generate SSWDB set list, generate packages and spawn mirror job
+; Purpose: generate SSWDB set list, generate packages and optionally spawn mirror/WGET  job
 ;
 ; Input Parameters:
 ;   relsets -    list of directories under $SSWDB, or list of environment
@@ -32,6 +34,19 @@ pro sswdb_upgrade, relsets, _extra=_extra,             $
 ;   mirror - optional path/name of mirror to run (default = ssw_bin('mirror'))
 ;   passive_ftp - force use of Passive ftp, required by some firewalls/proxys
 ;                 (same effect is had by setting $ssw_passive_ftp outside)
+;   wget - use wget in place of heritage ftp/Mirror
+;          if switch: check for distributed OS/Arch binary - if none, use local default wget in path
+;          if existing file name, used that explicit wget binary
+;   lmsal - if set, use lmsal $SSW http (allows older wget versions, but possibly some hours stale 
+;           for non-lmsal mastered branches) - provides alternate parent using 'http' instead of (nascom) 'https'
+;           so allows use of older wget versions - pending filling out the wget +V1.18/ssl matrix in distribution.V
+;   clean_wget (switch) - if set, inhibit or remove the wget 'index.html<crap>' - probably the default
+;   noclean_wget (switch) - if set, leave the 'index.html<crap>' post wget - maybe used later for client side removes(tbd) and Then removed
+;   cmds_wget (output) - vector of wget commands (either spawned or not) - if wget set, but spawn not, can verify prior to /spawn call...
+;   remote_urls (output) - implied urls@SSW host (wget source)
+;   local_paths (output) - implies local paths (1:1) remote_urls - wget destination, relative to $SSW
+;
+;   
 ;
 ; Calling Examples:
 ;
@@ -62,15 +77,18 @@ pro sswdb_upgrade, relsets, _extra=_extra,             $
 ;     28-Apr-2004 - S.L.Freeland - protect against inadvertant use of $HOME
 ;                   for $tdb/$ydb/$PERM_DATA/$smm per Jeff Payne commen.
 ;     25-sep-2007 - S.L.Freeland - finally added ssw_whereis_perl.pro hook
+;      8-aug-2019 - S.L.Freeland - wget hooks, per recent ssw_upgrade/ssw_upgrade_wget
 ;                  
 ;
 ; Restrictions:
-;   Assume SolarSoft & Perl installed on local machine
+;   Assume SolarSoft & Perl installed on local machine - Now, WGET in place of Perl/Mirror
 ;-
 debug=keyword_set(debug)
 spawnit=keyword_set(spawnit)               ; 17-Januaray-1997 DEFAULT = /NOSPAWN
 loud=keyword_set(loud) or keyword_set(verbose)
-
+wget_spawnit=spawnit 
+box_message,'inhibiting Mirror' + (['',' Will spawn WGET instead'])(wget_spawnit)
+spawnit=0
 if n_elements(group) eq 0 then group=get_group()
 if n_elements(user) eq 0 then user=get_user()
 
@@ -265,6 +283,21 @@ if spawnit then begin
    if loud then spawn,mircmd else spawn,mircmd,result
 endif
 cd,curr
+box_message,'Mirror deprecated, using wget''
+dist_wget=ssw_bin_path('wget'+(['','.exe'])(os_family() eq 'Windows'),found=bin_found)
+case 1 of 
+   file_exist(wget) : wget_cmd=wget ; using user input wget/path
+   bin_found: wget_cmd=dist_wget
+   else: wget_cmd='wget'
+endcase
+;  map mirror file remote:local -> wget urls:local
+mirror_file = concat_dir(getenv('SSW'),'site/mirror/sswdb_upgrade.mirror')
+ssw_upgrade_mirror2wget,rem,loc,lmsal=lmsal,mirror_file=mirror_file
+remote_urls=rem
+local_paths=loc
+clean=1-keyword_set(noclean_wget) ; default cleansup wget mess...
+cmds_wget=ssw_wget_mirror2(rem,loc,spawn=wget_spawnit, clean=clean,wget_cmd=wget_cmd,loud=loud)
+
 
 if debug then stop
 return

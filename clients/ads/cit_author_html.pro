@@ -2,7 +2,9 @@
 PRO cit_author_html, bibcodes, bib_file=bib_file, html_file=html_file, $
                      name=name, ads_library=ads_library, $
                      author=author, ads_data=ads_data, remove_file=remove_file, $
-                     link_author=link_author, surname=surname
+                     link_author=link_author, surname=surname, $
+                     self_cite_name=self_cite_name, $
+                     out_data=out_data, quiet=quiet
 
 ;+
 ; NAME:
@@ -40,7 +42,10 @@ PRO cit_author_html, bibcodes, bib_file=bib_file, html_file=html_file, $
 ;     Surname:   The surname of the person to which the publication
 ;                list belongs. This is used to check how many first
 ;                author papers belong to the person (this information
-;                is printed to the IDL screen).
+;                is printed to the IDL screen). For authors with
+;                multiple surnames (for example, a woman who changes
+;                her name after getting married), SURNAME should be
+;                given as a string array.
 ;     Ads_Library: This should be set to a URL pointing to an ADS
 ;                library containing the same publication list as the
 ;                html file. A link will be inserted in the html
@@ -49,12 +54,33 @@ PRO cit_author_html, bibcodes, bib_file=bib_file, html_file=html_file, $
 ;                Bibcodes to be *removed* from the list contained in
 ;                Bibcodes. This can be useful if you have a common
 ;                name and want to keep a permanent list of wrong
-;                matches. 
+;                matches.
+;     Self_Cite_Name: This should be set to the surname of the
+;                author. The routine will count the number of
+;                self-citations and print the average self-citations
+;                per paper to the html file. A self-citation is when a
+;                paper in the author's publication list cites a
+;                first-author paper of the author. WARNING: this slows
+;                the routine down a lot!
+;
+; KEYWORD PARAMETERS:
+;     QUIET:     If set, then no information is printed to IDL
+;                window. 
 ;
 ; OPTIONAL OUTPUTS:
 ;     Ads_Data:  This is a structure containing the ADS data for each
 ;                Bibcode. The format is the same as that returned by
 ;                CIT_GET_ADS_ENTRY. 
+;     Out_Data:  A structure containing the numbers that are printed
+;                to the html file. The tags are:
+;                 h_index: h-index
+;                 n_first: no. of 1st author papers
+;                 n_first_ref: no. of 1st author refereed papers
+;                 n_papers: no. of papers
+;                 n_cit: total citations
+;                 start_year: year of first paper
+;                 yr_last_paper: the year of the author's last
+;                                first-author, refereed paper
 ;
 ; OUTPUTS:
 ;     Creates a html file containing a publication list. The name of
@@ -65,41 +91,92 @@ PRO cit_author_html, bibcodes, bib_file=bib_file, html_file=html_file, $
 ;
 ; CALLS:
 ;     CIT_GET_ADS_ENTRY, CIT_GET_ADS_KEY, CIT_JOUR_ABBREV,
-;     CIT_GET_ADS_BIBTEX, CIT_PROCESS_BIBTEX
+;     CIT_GET_ADS_BIBTEX, CIT_FILL_STRINGS, CIT_BBL2STR
 ;
 ; EXAMPLE:
 ;      Search for an author in ADS, and save the output as bibtex. If
 ;      the file is called 'parker.bbl', then do:
 ;
 ;      IDL> str=cit_bib2str('parker.bbl')
-;      IDL> cit_author_html,str.id,html_file='parker.html',name='Dr. E.N. Parker'      
+;      IDL> cit_author_html,str.id,html_file='parker.html',name='Dr. E.N. Parker'
+;
+;      If you store the bibcodes in a text file called
+;      'parker_bcodes.txt' in the working directory, then you can call
+;      the routine as:
+;
+;      IDL> cit_author_html, surname='Parker'
+;
+;      The routine will automatically set bib_file='parker_bcodes.txt'
+;      and it will also check if remove_file='parker_remove.txt'
+;      exists. The author's name (NAME=) will be set to 'Dr. Parker'. 
 ;
 ; MODIFICATION HISTORY:
 ;      Ver.1, 12-Jul-2017, Peter Young
 ;      Ver.2, 26-Mar-2018, Peter Young
 ;        Now checks if the html file already exists and deletes it.
+;      Ver.3, 6-Sep-2019, Peter Young
+;        Updated web link to point to new ADS website.
+;      Ver.4, 10-Sep-2019, Peter Young
+;        Now calls cit_bbl2str to access bibtex information;
+;        cit_fill_strings is now used to fill in the author and
+;        article strings.
+;      Ver.5, 16-Sep-2019, Peter Young
+;        Added self_cite_name= optional input.
+;      Ver.6, 19-Sep-2019, Peter Young
+;        Number of first author papers is now printed to html file (if
+;        surname is specified); added OUT_DATA optional output;
+;        reduced information printed to IDL window; added /QUIET
+;        keyword.
+;      Ver.7, 28-Oct-2019, Peter Young
+;        Fixed minor problem when counting refereed papers if
+;        'property' is empty.
+;      Ver.8, 12-Nov-2019, Peter Young
+;        Fixed minor problem with h-index calculation.
+;      Ver.9, 04-Mar-2020, Peter Young
+;        SURNAME can be an array now.
 ;-
 
 
 
-IF n_elements(bibcodes) EQ 0 AND n_elements(bib_file) EQ 0 THEN BEGIN
+IF n_elements(bibcodes) EQ 0 AND n_elements(bib_file) EQ 0 AND n_elements(surname) EQ 0 THEN BEGIN
   print,'Use:  IDL> cit_author_html, bibcodes, [html_file=, bib_file=, name=, ads_library=, author='
-  print,'                              ads_data=, remove_file='
+  print,'                              ads_data=, remove_file=, surname=, self_cite_name=, out_data= ]'
   return
+ENDIF 
+
+;
+; The following allows the inputs to cit_author_html to be simplified,
+; but it requires the bib_file to exist.
+;
+; Note:
+;  - a surname can have spaces (e.g., "Smith Jones"), so I removed the
+;    spaces when creating the filenames below.
+;  - surname can be an array, for example, if a woman gets married and
+;    takes her partner's name. I use the first element of the
+;    array (SNAME) for creating the filenames in this case.
+;
+IF n_elements(surname) NE 0 THEN BEGIN
+  ns=n_elements(surname)
+  sname=surname[0]
+  IF n_elements(bib_file) EQ 0 AND n_elements(bibcodes) EQ 0 THEN bib_file=strlowcase(strcompress(sname,/remove_all))+'_bcodes.txt'
+  IF n_elements(remove_file) EQ 0 THEN remove_file=strlowcase(strcompress(sname,/remove_all))+'_remove.txt'
+  IF n_elements(html_file) EQ 0 THEN html_file=strlowcase(strcompress(sname,/remove_all))+'.html'
+  IF n_elements(name) EQ 0 THEN name='Dr. '+sname
 ENDIF 
 
 IF n_elements(name) EQ 0 THEN BEGIN
   name='the Author'
-  print,"%MAKE_AUTHOR_HTML: use the keyword NAME= to specify the author's name"
+  print,"% CIT_AUTHOR_HTML: use the keyword NAME= to specify the author's name"
 ENDIF
+
 
 ;
 ; Check if the user has an ADS key.
 ;
 chck=cit_get_ads_key(status=status,/quiet)
 IF status EQ 0 THEN BEGIN
-  print,'%CIT_AUTHOR_HTML: You do not have an ADS key. Please check the webpage'
-  print,'    http://pyoung.org/quick_guides/ads_idl_query.html'
+  print,'% CIT_AUTHOR_HTML: You do not have an ADS key. Please check the webpage'
+  print,'    https://pyoung.org/quick_guides/ads_idl_query.html'
   print,'for how to get one.'
   return
 ENDIF 
@@ -107,7 +184,7 @@ ENDIF
 IF n_elements(bib_file) NE 0 THEN BEGIN
   chck=file_search(bib_file,count=count)
   IF count EQ 0 THEN BEGIN
-    print,'%CIT_AUTHOR_HTML: The specified bib_file does not exist. Returning...'
+    print,'% CIT_AUTHOR_HTML: The specified bib_file does not exist. Returning...'
     return
   ENDIF
   openr,lin,bib_file,/get_lun
@@ -119,7 +196,8 @@ IF n_elements(bib_file) NE 0 THEN BEGIN
   ENDWHILE
   free_lun,lin
   bibcodes=bibcodes[1:*]
-ENDIF 
+ENDIF
+
 
 IF n_elements(html_file) EQ 0 THEN html_file='author.html'
 
@@ -143,8 +221,12 @@ IF count NE 0 THEN file_delete,out_file
 ;
 ; This calls the ADS to retrieve information about the articles. Note
 ; that ads_data may contain less entries than bibcodes.
+; The cit_fill_strings routine fills the "author_string" and
+; "article_string" tags, which are used when writing out the html
+; entries. 
 ;
 ads_data=cit_get_ads_entry(bibcodes,/remove_abstracts)
+cit_fill_strings,ads_data
 
 
 ;
@@ -175,14 +257,17 @@ IF nk NE 0 THEN ads_data=ads_data[k]
 ; Remove any entries that are flagged in the remove_file
 ;
 IF n_elements(remove_file) NE 0 THEN BEGIN
-  str1=''
-  openr,lrem,remove_file,/get_lun
-  WHILE eof(lrem) NE 1 DO BEGIN
-    readf,lrem,str1
-    i=where(ads_data.bibcode NE trim(str1),ni)
-    IF ni NE 0 THEN ads_data=ads_data[i]
-  ENDWHILE
-  free_lun,lrem
+  chck=file_info(remove_file)
+  IF chck.exists EQ 1 THEN BEGIN 
+    str1=''
+    openr,lrem,remove_file,/get_lun
+    WHILE eof(lrem) NE 1 DO BEGIN
+      readf,lrem,str1
+      i=where(ads_data.bibcode NE trim(str1),ni)
+      IF ni NE 0 THEN ads_data=ads_data[i]
+    ENDWHILE
+    free_lun,lrem
+  ENDIF 
 ENDIF
 
 
@@ -205,7 +290,7 @@ cit_list=cit_list[j]
 nj=n_elements(j)
 h_index=-1
 i=0
-WHILE h_index LT 0 AND i LT nj-1 DO BEGIN
+WHILE h_index LT 0 AND i LE nj-1 DO BEGIN
   IF i+1 GT cit_list[i] THEN h_index=i
   i=i+1
 ENDWHILE
@@ -213,34 +298,61 @@ IF h_index EQ -1 THEN h_index=nj   ; in case min(citations) > nj
 
 
 ;
-; Get bibtex entries for all papers
+; Some information related to conference proceedings is not obtained
+; with cit_get_ads_entry, so I need to access it from the bibtex
+; entries. It's quicker to get all the bibtex in one go rather
+; than for individual entries, so I get them here and convert to a
+; structure. 
 ;
-; ***PRY getting bibtex entries for individual entries seems to be
-; slow, so I thought to get them all in one call, but I need to work
-; on this (use cit_bbl2str?)
-;
-;; bibtex=cit_get_ads_bibtex(ads_data.bibcode)
-;; nb=n_elements(bibtex)
-;; IF nb NE npapers THEN print,'***WARNING: bibtex size mismatch***'
+bibtex=cit_get_ads_bibtex(ads_data.bibcode)
+bibstr=cit_bbl2str(bib_strarr=bibtex)
 
 ;
 ; Check number of refereed articles.
 ;
 refereed=bytarr(npapers)
 FOR i=0,npapers-1 DO BEGIN
-  np=n_elements(ads_data[i].property)
+  np=ads_data[i].property.count()
   swtch=0
   j=0
-  WHILE swtch EQ 0 DO BEGIN
-    IF trim(ads_data[i].property[j]) EQ 'REFEREED' THEN BEGIN
-      refereed[i]=1b
-      swtch=1
-    ENDIF 
-    j=j+1
-    IF j EQ np THEN swtch=1
-  ENDWHILE 
+  IF np NE 0 THEN BEGIN 
+    WHILE swtch EQ 0 DO BEGIN
+      IF trim(ads_data[i].property[j]) EQ 'REFEREED' THEN BEGIN
+        refereed[i]=1b
+        swtch=1
+      ENDIF 
+      j=j+1
+      IF j EQ np THEN swtch=1
+    ENDWHILE
+  ENDIF 
 ENDFOR 
 nref=total(refereed)
+
+;
+;
+; Now get stats for first author papers. This requires the routine to
+; know the author's surname, hence the keyword 'surname'
+;
+IF n_elements(surname) NE 0 THEN BEGIN
+  yr_last_paper=1900
+  n_first=0
+  n_first_ref=0
+  ns=n_elements(surname)
+  FOR i=0,npapers-1 DO BEGIN
+    swtch=0b
+    FOR j=0,ns-1 DO BEGIN
+      chck=strpos(strlowcase(ads_data[i].author[0]),strlowcase(surname[j]))
+      IF chck GE 0 AND swtch EQ 0 THEN BEGIN
+        n_first=n_first+1
+        IF refereed[i] EQ 1 THEN BEGIN
+          n_first_ref=n_first_ref+1
+          IF fix(ads_data[i].year) GT yr_last_paper THEN yr_last_paper=fix(ads_data[i].year)
+        ENDIF
+        swtch=1b
+      ENDIF
+    ENDFOR 
+  ENDFOR
+ENDIF 
 
 
 ;
@@ -271,9 +383,44 @@ IF n_elements(ads_library) NE 0 THEN BEGIN
 ENDIF 
 printf,lout,'<p><a href="'+out_file+'">List of publications ordered by citations</a><br>'
 printf,lout,'Number of papers: '+trim(npapers)+' (refereed: '+trim(nref)+')<br>'
+IF n_elements(n_first) NE 0 THEN BEGIN
+  printf,lout,'First author papers: '+trim(n_first)+' (refereed: '+trim(n_first_ref)+')<br>'
+ENDIF 
 printf,lout,'No. of citations: '+trim(tot_cit)+'<br>'
-printf,lout,'<a href=http://en.wikipedia.org/wiki/H-index>h-index</a>: '+trim(h_index)
-
+printf,lout,'<a href=http://en.wikipedia.org/wiki/H-index>h-index</a>: '+trim(h_index)+'<br>'
+;
+; The following does a check on self-citation. For each publication in
+; the author's list, the routine downloads the citing papers
+; and checks if the first author matches the surname given by
+; SELF_CITE_NAME. The author's "self-citation index" is the
+; number of self-citations per paper. I only include refereed journal
+; articles (doctype='article').
+;
+IF n_elements(self_cite_name) THEN BEGIN
+  k=where(ads_data.doctype EQ 'article',nk)
+  ad=ads_data[k]
+  self_cite=intarr(nk)
+  npap=nk
+  FOR i=0,nk-1 DO BEGIN
+    bibs=cit_get_citing_papers(ad[i].bibcode)
+    s=cit_get_ads_entry(bibs)
+    IF n_tags(s) NE 0 THEN BEGIN 
+      ns=n_elements(s)
+      count=0
+      FOR j=0,ns-1 DO BEGIN
+        IF s[j].author.count() GT 0 THEN BEGIN
+          chck=strpos(strlowcase(s[j].author[0]),strlowcase(self_cite_name))
+          IF chck GE 0 THEN count=count+1
+        ENDIF 
+      ENDFOR
+    ENDIF ELSE BEGIN
+      npap=npap-1   ; removed bad paper
+    ENDELSE 
+    self_cite[i]=count
+  ENDFOR
+  nsc=float(total(self_cite))/float(npap)
+  printf,lout,'Self-citations: '+trim(string(format='(f7.2)',nsc))+' per paper'
+ENDIF 
 
 ;
 ; Now go through each year and print out the entries for that year.
@@ -292,103 +439,12 @@ FOR i=maxyr,minyr,-1 DO BEGIN
     FOR j=0,nk-1 DO BEGIN
       ii=k[isort[j]]
      ;
-      IF ads_data[ii].page.count() EQ 0 THEN page_str='' ELSE page_str=ads_data[ii].page[0]
+      web_link='https://ui.adsabs.harvard.edu/abs/'+ads_data[ii].bibcode
+      citstr=' ['+trim(ads_data[ii].citation_count)+']'
+      printf,lout,'<li><a href='+web_link+'>'+ads_data[ii].title[0]+'</a>'+citstr+'<br>'
      ;
-      swtch=0
-     ;
-     ; Based on the 'doctype' entry, I customize the output for
-     ; articles, proceedings, etc.
-     ;
-      CASE ads_data[ii].doctype OF
-        'article': BEGIN
-          article_string=cit_jour_abbrev(ads_data[ii].pub)+ $
-                         ', '+ads_data[ii].volume+', '+page_str
-        END
-       ;
-        'erratum': BEGIN
-          article_string=ads_data[ii].pub+', '+ads_data[ii].volume+', '+page_str+' (Erratum)'
-        END
-        ;
-        'inproceedings': BEGIN
-          bibtex=cit_get_ads_bibtex(ads_data[ii].bibcode)
-          info=cit_process_bibtex(bibtex)
-          IF page_str EQ '' THEN page_str2='' ELSE page_str2=', p. '+page_str
-          IF info.editor EQ '' THEN ed_str='' ELSE ed_str=' (Editors: '+info.editor+')'
-          IF ads_data[ii].volume EQ '' THEN vol_str='' ELSE vol_str=', '+ads_data[ii].volume
-          IF info.series EQ '' THEN ser_str='' ELSE ser_str=', '+info.series
-         ;
-          article_string=info.booktitle+ed_str+ser_str+vol_str+page_str2
-        END 
-       ;
-        'phdthesis': BEGIN
-          bibtex=cit_get_ads_bibtex(ads_data[ii].bibcode)
-          info=cit_process_bibtex(bibtex)
-          IF info.school NE '' THEN extra_str=' ('+info.school+')' ELSE extra_str=''
-          article_string=ads_data[ii].pub+extra_str
-        END
-       ;
-        'abstract': BEGIN
-          swtch=1   ; this means these will get ignored.
-        END
-       ;
-        'inbook': BEGIN
-          article_string=ads_data[ii].pub
-          bibtex=cit_get_ads_bibtex(ads_data[ii].bibcode)
-          info=cit_process_bibtex(bibtex)
-          IF info.editor NE '' THEN article_string=article_string+' (Editors: '+trim(info.editor)+')'
-          article_string=article_string+', p.'+ads_data[ii].page[0]
-        END 
-       ;
-        'book': BEGIN
-          bibtex=cit_get_ads_bibtex(ads_data[ii].bibcode)
-          info=cit_process_bibtex(bibtex)
-          article_string=info.booktitle
-        END
-       ;
-        'eprint': BEGIN
-          article_string=ads_data[ii].page[0]
-        END
-       ;
-        'intechreport': BEGIN
-          article_string=ads_data[ii].title[0]+' (Report)'
-        END
-       ;
-        'techreport': BEGIN
-          article_string=ads_data[ii].title[0]+' (Report)'
-        END
-       ;
-        ELSE: BEGIN
-          print,'%CIT_AUTHOR_HTML: ***WARNING I have not encountered this doctype before***'
-          print,'   '+ads_data[ii].bibcode+'   doctype: ',ads_data[ii].doctype
-          article_string=''
-        END
-      ENDCASE
-     ;
-      IF swtch NE 1 THEN BEGIN
-        web_link='http://adsabs.harvard.edu/abs/'+ads_data[ii].bibcode
-        citstr=' ['+trim(ads_data[ii].citation_count)+']'
-       ;
-       ; Note the title= entry creates "hover" text that displays if
-       ; you leave the mouse hovering over the link. I set the hover
-       ; text to be the abstract. I had to remove this as it caused a
-       ; problem if the abstract contained html code.
-       ;
-        printf,lout,'<li><a href='+web_link+'>'+ads_data[ii].title[0]+'</a>'+citstr+'<br>'
-     ;
-        author_string=ads_data[ii].author[0]
-        nauth=n_elements(ads_data[ii].author)
-        IF nauth GT 1 THEN BEGIN 
-          FOR ia=1,nauth-1 DO BEGIN
-            IF ia EQ nauth-1 THEN sep_string=' & ' ELSE sep_string=', '
-            author_string=author_string+sep_string+ads_data[ii].author[ia]
-          ENDFOR
-        ENDIF
-     ;
-        ads_data[ii].author_string=author_string
-        ads_data[ii].article_string=article_string
-        printf,lout,author_string+', '+article_string
-        printf,lout,'</li>'
-      ENDIF 
+      printf,lout,ads_data[ii].author_string+', '+ads_data[ii].article_string
+      printf,lout,'</li>'
     ENDFOR
     printf,lout,'</ol></p>'
   ENDIF 
@@ -420,60 +476,26 @@ free_lun,lout
 ;
 ; Now print some information to the IDL window
 ;
-print,html_file+' has been written.'
-;
-; Print
-;
-print,''
-cit_list=ads_data.citation_count
-i=where(cit_list GE 20,ni)
-print,'Papers with 20 or more citations: '+trim(ni)
-i=where(cit_list GE 30,ni)
-print,'Papers with 30 or more citations: '+trim(ni)
-i=where(cit_list GE 40,ni)
-print,'Papers with 40 or more citations: '+trim(ni)
-i=where(cit_list GE 50,ni)
-print,'Papers with 50 or more citations: '+trim(ni)
-;
-;
-; Print numbers of each publication type
-;
-noth=0
-print,''
-print,'Publication type:'
-k=where(ads_data.doctype EQ 'article',nk)
-print,'Journal: ',trim(nk)
-noth=npapers-nk
-k=where(ads_data.doctype EQ 'inbook',nk)
-print,'Books: ',trim(nk)
-noth=noth-nk
-k=where(ads_data.doctype EQ 'inproceedings',nk)
-print,'Proceedings: ',trim(nk)
-noth=noth-nk
-k=where(ads_data.doctype EQ 'eprint',nk)
-print,'Preprints: ',trim(nk)
-noth=noth-nk
-print,'Other: ',trim(noth)
+IF NOT keyword_set(quiet) THEN print,html_file+' has been written.'
+
+
 ;
 ;
 ; Now get stats for first author papers. This requires the routine to
 ; the author's surname, hence the keyword 'surname'
 ;
-IF n_elements(surname) NE 0 THEN BEGIN
-  n_first=0
-  n_first_ref=0
-  FOR i=0,npapers-1 DO BEGIN
-    chck=strpos(strlowcase(ads_data[i].author[0]),strlowcase(surname))
-    IF chck GE 0 THEN BEGIN
-      n_first=n_first+1
-      IF refereed[i] EQ 1 THEN n_first_ref=n_first_ref+1
-    ENDIF 
-  ENDFOR
-  print,''
-  print,'No. of first author papers: ',trim(n_first)+'/'+trim(npapers)
-  print,'No. of refereed articles: ',trim(nref)+'/'+trim(npapers)
-  print,'No. of first author, refereed papers: ',trim(n_first_ref)+'/'+trim(nref)
-ENDIF 
+;; IF n_elements(surname) NE 0 THEN BEGIN
+;;   n_first=0
+;;   n_first_ref=0
+;;   FOR i=0,npapers-1 DO BEGIN
+;;     FOR j=0,ns-1
+;;     chck=strpos(strlowcase(ads_data[i].author[0]),strlowcase(surname))
+;;     IF chck GE 0 THEN BEGIN
+;;       n_first=n_first+1
+;;       IF refereed[i] EQ 1 THEN n_first_ref=n_first_ref+1
+;;     ENDIF 
+;;   ENDFOR
+;; ENDIF 
 
 
 ;
@@ -524,5 +546,21 @@ printf,lout,foot_text
 printf,lout,'</p></td></tr></tbody></table></center></body></html>'
 
 free_lun,lout
+
+;
+; Create the output data structure.
+;
+IF n_elements(n_first) EQ 0 THEN n_first=-1
+IF n_elements(n_first_ref) EQ 0 THEN n_first_ref=-1
+IF n_elements(yr_last_paper) EQ 0 THEN yr_last_paper=-1
+out_data={ h_index: h_index, $
+           n_first: n_first, $
+           n_first_ref: n_first_ref, $
+           n_papers: npapers, $
+           n_papers_ref: nref, $
+           n_cit: tot_cit, $
+           start_year: min(fix(ads_data.year)), $
+           yr_last_paper: yr_last_paper}
+           
 
 END

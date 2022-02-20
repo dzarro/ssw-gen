@@ -44,8 +44,8 @@
 
 function fifo::init,init_size,_extra=extra,list=list
 
-self.add_size=10
-self.init_size=10
+self.add_size=100
+self.init_size=100
 self.list=keyword_set(list)
 if is_number(init_size) then self.init_size=init_size
 self->create
@@ -185,6 +185,7 @@ endelse
 struct.ids[ipos]=trim(id)
 if keyword_set(no_copy) && ~is_object(value) then $
  *ptr=temporary(value) else *ptr=value
+
 struct.ptrs[ipos]=ptr
 *pointer=struct
 

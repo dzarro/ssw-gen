@@ -25,6 +25,9 @@
 ;                          Use when sure that remote file is
 ;                          available
 ;               QUIET = turn off all messages [def = VERBOSE]
+;               USE_LOCAL_TIME = timestamp downloaded file to local
+;               time
+;               BACKGROUND = download in background thread
 ;
 ; History     : 27-Dec-2009, Zarro (ADNET) - Written
 ;                8-Oct-2010, Zarro (ADNET) - Dropped support for
@@ -96,11 +99,35 @@
 ;               - removed duplicate call to FILE_CHMOD
 ;               28-May-2018, Zarro (ADNET)
 ;               - skip calling sock_check for FTP
+;               11-Jan-2019, Zarro (ADNET)
+;               - add /USE_LOCAL_TIME and made default to timestamp
+;                 downloaded file with UTC
+;               19-Jan-2019, Zarro (ADNET)
+;               - download to temporary directory before moving
+;                 to user-specified directory
+;               26-Jan-2019, Zarro (ADNET) 
+;               - more error checking and prevention
+;               4-Feb-2019, Zarro (ADNET) 
+;               - allowed special characters (: and .) in downloaded filenames
+;               2-Mar-2019, Zarro (ADNET) 
+;               - replaced FILE_TEST with FILE_SEARCH
+;               5-Sep-2019, Zarro (ADNET)
+;               - add /A_EXECUTE to ensure execute bit for program files
+;               15-Nov-2019, Zarro (ADNET) 
+;               - added more error checking
+;               8-Jun-2020, Zarro (ADNET)
+;               - added test for directory write access 
+;               28-Aug-2020, Zarro (ADNET)
+;               - output error messages regardless of /VERBOSE 
+;               30-Nov-2020, Zarro (ADNET)
+;               - improved error messaging
+;               13-Jan-2021, Zarro (ADNET)
+;               - fixed bug with /PROGRESS not working for QUERY URL's
 ;
 ;-
-
 ;-----------------------------------------------------------------  
 function sock_get_callback, status, progress, data  
+
 
 if (progress[0] eq 1) && (progress[1] gt 0) then begin
  if ptr_valid(data) then begin
@@ -146,24 +173,20 @@ end
 pro sock_get_main,url,out_name,clobber=clobber,local_file=local_file,no_check=no_check,$
   progress=progress,err=err,status=status,cancelled=cancelled,$
   out_dir=out_dir,_ref_extra=extra,verbose=verbose,$
-  debug=debug,quiet=quiet
+  debug=debug,quiet=quiet,use_local_time=use_local_time
+
 
 err='' & status=0
 
+use_local_time=keyword_set(use_local_time)
 verbose=keyword_set(verbose)
 quiet=keyword_set(quiet)
-loud= verbose || ~quiet
+loud= verbose && ~quiet
 
 error=0
 catch,error
 if (error ne 0) then begin
- if keyword_set(debug) then begin
-  mprint,err_state()
-  if obj_valid(ourl) then begin
-   ourl->getproperty,response_code=rcode
-   mprint,'Response code = '+trim(rcode)
-  endif
- endif
+ derr=err_state()
  catch, /cancel
  message,/reset  
  goto,bail  
@@ -174,13 +197,13 @@ local_file=''
 clobber=keyword_set(clobber)
 
 stc=url_parse(url)
-file=file_break(stc.path)
-path=file_break(stc.path,/path)+'/'
+file=file_basename(stc.path)
+path=file_dirname(stc.path)+'/'
 query=stc.query
 
 if is_blank(file) && is_blank(path) then begin
- err='File name not included in URL path.'
- if loud then mprint,err
+ err='File name not included in URL path - '+url
+ mprint,err
  return
 endif
 
@@ -190,49 +213,54 @@ odir=curdir()
 ofile=file
 if n_elements(out_name) gt 1 then begin
  err='Output filename must be scalar string.'
- if loud then mprint,err
+ mprint,err
  return
 endif
 
 if is_string(out_name) then begin
- tdir=file_break(out_name,/path)
+ tdir=file_dirname(out_name)
+ if is_blank(tdir) || tdir eq '.' then tdir=curdir()
  if is_string(tdir) then odir=tdir 
- ofile=file_break(out_name)
+ ofile=file_basename(out_name)
 endif
+
 if is_string(out_dir) then odir=out_dir
-if ~test_dir(odir,verbose=loud,err=err) then return
+
+if ~file_test(odir,/direct) then begin
+ err='Non-existent directory - '+odir
+ mprint,err
+ return
+endif
+
+if ~file_test(odir,/direct,/write) then begin
+ err='No write access to directory - '+odir
+ mprint,err
+ return
+endif
 
 bsize=0l & chunked=0b & ok=1b & rdate='' & code=404 & disposition=''
 durl=url_fix(url,_extra=extra)
 
 use_ftp=is_ftp(durl)
 pre_check=~keyword_set(no_check) && is_blank(query) && ~use_ftp
+if is_number(progress) then begin
+ if (progress gt 0) && ~use_ftp then pre_check=1b
+endif
+
 if pre_check then begin
- for i=0,1 do begin
-  ok=sock_check(durl,chunked=chunked,disposition=disposition,size=bsize,$
-               _extra=extra,date=rdate,code=code,debug=debug,$
-                location=location,response_code=ocode)
-  if ~ok then begin
-   sock_error,durl,code,response_code=ocode,err=err,verbose=loud
-   return
-  endif
-
-  if keyword_set(debug) then begin
-   print,'% DISPOSITION: ',disposition
-   print,'% RDATE: '+rdate
-   print,'% BSIZE: '+trim(bsize)
-  endif
-
-;-- check if redirecting
-
-  if is_string(location) then begin
-   if loud then mprint,'Redirecting to '+location
-   durl=url_fix(location,_extra=extra)
-  endif else begin
-   if is_string(disposition) then ofile=disposition
-   break
-  endelse
- endfor
+ ok=sock_check(durl,chunked=chunked,disposition=disposition,size=bsize,$
+               _extra=extra,date=rdate,code=code,debug=debug,err=err,$
+                location=location,response_code=ocode,verbose=loud)
+ if is_string(err) && ~loud then mprint,err
+ if ~ok then return
+ if is_string(location) then durl=location
+ if is_string(disposition) then ofile=disposition
+ if keyword_set(debug) then begin
+  if is_string(location) then mprint,'Redirecting to - '+location
+  if is_string(disposition) then mprint,'DISPOSITION - '+disposition
+  if is_string(rdate) then mprint,'RDATE - '+rdate
+  mprint,'BSIZE - '+trim(bsize)
+ endif
 endif
 
 ;-- if file exists, download a new one if /clobber or local size or time
@@ -240,8 +268,9 @@ endif
 
 ofile=local_name(concat_dir(odir,ofile))
 osize=0l
-have_file=file_test(ofile,/regular)
-if have_file then osize=file_size(ofile)
+chk=file_search(ofile,count=fcount)
+have_file=fcount eq 1
+if have_file then osize=(file_info(ofile)).size > 0
 
 ;-- check if remote file is newer
 ;   (a URL query doesn't have a remote timestamp, so we don't check in
@@ -249,20 +278,24 @@ if have_file then osize=file_size(ofile)
 
 newer_file=1b
 if valid_time(rdate) && have_file then begin
- local_time=anytim(file_time(ofile))
- remote_time=anytim(rdate)+ut_diff(/sec)
- dprint,'% Remote file time: ',anytim(remote_time,/vms)
- dprint,'% Local file time: ',anytim(local_time,/vms)
- newer_file=remote_time gt local_time
- if loud then if newer_file then mprint,'Remote file is newer than local file.'
+ ldate=file_time(ofile,/vms)
+ flocal_time=anytim2tai(ldate)
+ fremote_time=anytim2tai(rdate)
+ if use_local_time then fremote_time=fremote_time+ut_diff(/sec) 
+
+ dprint,'% Remote file time: ',anytim2utc(fremote_time,/vms)
+ dprint,'% Local file time: ',anytim2utc(flocal_time,/vms)
+ newer_file=fremote_time gt flocal_time
+; if loud then if newer_file then mprint,'Remote file is newer than local file.'
 endif
 
 size_change=1b
 if (bsize gt 0) && (osize gt 0) then size_change=(bsize ne osize)
 
 download=~have_file || clobber || size_change || newer_file || is_string(query)
+
 if ~download then begin
- if loud then mprint,'Identical local file '+ofile+' already exists (not downloaded). Use /clobber to re-download.'
+ if loud then mprint,'Local file '+ofile+' already exists (not downloaded). Use /clobber to re-download.'
  local_file=ofile
  status=2
  return
@@ -274,8 +307,8 @@ ourl=obj_new('idlneturl2',durl,_extra=extra,debug=debug)
 
 ;-- show progress bar?
 
-if keyword_set(progress) && ~is_pyidl() then begin
- if ~chunked && (bsize ne 0) then begin
+if is_number(progress) && ~is_pyidl() then begin
+ if ~chunked && (bsize ne 0) && (progress gt 0.) then begin
   bar= 100. <  float(progress) > 10.
   if allow_windows() && (bar lt 100.) then begin
    callback_function='sock_get_callback'
@@ -290,7 +323,7 @@ endif
 ;-- download into temporary file and then rename to output file 
 
 if loud then t1=systime(/seconds)
-t_ofile=ofile+session_id()
+t_ofile=concat_dir(get_temp_dir(),file_basename(ofile)+'_'+session_id())
 
 result = ourl->Get(file=t_ofile)  
 
@@ -298,8 +331,15 @@ result = ourl->Get(file=t_ofile)
 
 bail: 
 
-ourl->getproperty,response_header=response,response_code=ocode
-obj_destroy,ourl
+if obj_valid(ourl) then begin
+ code=sock_code(ourl,err=err,response_code=ocode,disposition=disposition,date=rdate,size=bsize,debug=debug,_extra=extra)
+ if is_blank(err) then sock_error,durl,code,response_code=ocode,err=err,_extra=extra
+ obj_destroy,ourl
+ if is_string(err) then begin
+  mprint,err
+  return
+ endif
+endif
 
 if ptr_valid(callback_data) then begin
  if (*callback_data).cancelled then begin
@@ -311,42 +351,51 @@ if ptr_valid(callback_data) then begin
  endif
 endif
 
-sock_content,response,code=code,disposition=disposition,date=rdate,size=bsize
 chk=file_info(t_ofile)
 tsize=chk.size
 
-;-- check all failure possibilities
+;-- check for additional failure possibilities
 
 scode=strmid(trim(code),0,1)
+
 case 1 of
+ (error ne 0) && (scode ne '2'): begin
+  err=derr
+  mprint,err
+  status=0
+ end
+ ~chk.exists && (scode eq '2') && (bsize eq 0l): begin
+  status=1
+  if loud then mprint,'Remote file has zero byte size.'
+  file_create,t_ofile
+ end
   scode ne '2': begin
-  success=0b
+  status=0
   err='Download failed with HTTP status code: '+trim(code)
  end
  ~chk.exists: begin
-   err='Downloaded file not written to disk - check write access.'
-   success=0b
+   err='Remote file not written to disk (check write access).'
+   status=0
  end
- tsize eq 0: begin
-   err='Downloaded file has zero byte size - check disk space.'
-  success=0b
+ (tsize eq 0) && (bsize gt 0): begin
+   err='Downloaded file has zero byte size (check disk space).'
+  status=0
  end
  (bsize gt 0) && (tsize gt 0) && (tsize ne bsize): begin
-   err='File failed to download completely - possible network timeout.'
+   err='Remote file failed to download completely (possible network timeout).'
    help,tsize,bsize
-   success=0b
+   status=0
  end
   is_blank(result): begin
-   success=0b
-   err='File download failed - check URL.'
+   status=0
+   err='Download failed for unknown reasons (try again).'
   end
-else: success=1b
+else: status=1b
 endcase
 
-if ~success then begin
- if is_string(err) && scode eq '2' then mprint,err else $
-  sock_error,durl,code,response_code=ocode,err=err,verbose=loud
+if status eq 0 then begin
  if is_string(t_ofile) then file_delete,t_ofile,/quiet,/noexpand_path,/allow_nonexistent
+ if is_string(err) then mprint,err 
  return
 endif
 
@@ -357,6 +406,18 @@ if is_string(disposition) then begin
  if disposition ne bfile then ofile=concat_dir(odir,disposition)
 endif
  
+file_move,t_ofile,ofile,/overwrite,/allow_same,/noexpand_path
+chmod,ofile,/g_read,/g_write,/u_read,/u_write,/noexpand_path,/a_execute,_extra=extra
+local_file=ofile
+
+;-- update timestamp of downloaded file
+   
+if valid_time(rdate) then begin
+ ldate=rdate
+ if use_local_time then ldate=anytim2utc(anytim2tai(rdate)+ut_diff(/sec),/vms)
+ file_touch,ofile,ldate
+endif
+
 bsize=tsize
 if loud then begin
  t2=systime(/seconds)
@@ -366,37 +427,25 @@ if loud then begin
  mprint,m1+m2
 endif
 
-file_move,t_ofile,ofile,/overwrite,/allow_same
-file_chmod,ofile,/a_read,/a_write 
-local_file=ofile
 status=1
-
-;-- update timestamp of downloaded file to local time
-   
-if valid_time(rdate) then begin
- local_time=anytim(anytim(rdate)+ut_diff(/sec),/vms)
- file_touch,ofile,local_time
-endif
 
 return & end  
 
 ;-----------------------------------------------------------------------
   
 pro sock_get,url,out_name,local_file=local_file,_ref_extra=extra,$
+                     status=status,err=err,cancelled=cancelled,$
+                     background=background
+
+if keyword_set(background) then begin
+ thread,'sock_get',url,out_name,local_file=local_file,_extra=extra,$
                      status=status,err=err,cancelled=cancelled
+ return
+endif
 
+err=''
 local_file=''
-if ~since_version('6.4') then begin
- err='Requires IDL version 6.4 or greater.'
- mprint,err
- return
-endif
-
-if ~is_url(url) then begin
- pr_syntax,'sock_get,url,out_dir=out_dir'
- err='Input must be valid URL.'
- return
-endif
+if ~is_url(url,_extra=extra,/verbose,err=err) then return
 
 np=n_elements(url)
 if is_string(out_name) then begin

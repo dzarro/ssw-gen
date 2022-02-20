@@ -25,6 +25,8 @@
 ;                - permitted zero duration
 ;               11 Dec 2014, Zarro (ADNET)
 ;                - TIME input can be a MAP
+;               26 July 2019, Zarro (ADNET) 
+;                - support map array
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
@@ -41,6 +43,7 @@ endif
 
 cur_time=get_map_time(map,/tai)
 dtime=0.
+nmaps=n_elements(map)
 
 case 1 of
  valid_time(time): dtime=(anytim2tai(time)-cur_time)
@@ -50,8 +53,9 @@ case 1 of
   case 1 of
    keyword_set(days): dtime=dtime*3600.*24.
    keyword_set(seconds) : do_nothing=1
-  else: dtime=dtime*3600.
- endcase
+   else: dtime=dtime*3600.
+  endcase
+  if nmaps gt 1 then dtime=replicate(dtime,nmaps)
  end
 endcase
 

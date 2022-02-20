@@ -114,7 +114,12 @@
 ;               Version 5, SVHH, 11 March 2007
 ;                          Changed to use SWTCH as optional ouput mask for
 ;                          bad (altered) pixels.
-; Version     : 5, 11 March 2007
+;               Version 6, SVHH, 20 September 2019
+;                          Inserted parentheses in the main formula, calculating
+;                          badix. In IDL, AND and OR have identical precedence!
+;                          Bug discovered by Peter Young, 23 years after it was
+;                          introduced!
+; Version     : 6, 20 September 2019
 ;-            
 
 FUNCTION clean_exposure,expo,$
@@ -145,8 +150,8 @@ FUNCTION clean_exposure,expo,$
   lowdata = (expo LT limit)
   hidata = lowdata-1b
   
-  badix = WHERE(lowdata AND (expo-med) GT max_var_low OR $
-                hidata AND (expo/(med > 1)) GT max_factor_hi,count)
+  badix = WHERE((lowdata AND (expo-med) GT max_var_low) OR $
+                (hidata AND (expo/(med > 1)) GT max_factor_hi),count)
   
   sz = SIZE(expo)
   sz(sz(0)+1) = 1

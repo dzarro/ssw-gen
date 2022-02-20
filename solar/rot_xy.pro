@@ -67,7 +67,7 @@
 ;                 both for DATE and DATE+INTERVAL
 ;       VSTART, VEND = {b0,l0,rsun} = input structure with b0,l0,rsun
 ;                at start/end of rotation
-;       KEEP_BACKSIDE= return coordinates that rotated over the limb
+;       RETURN_BACKSIDE= return coordinates that rotated over the limb
 ;       
 ; HISTORY:
 ;       Version 1, March 18, 1996, Liyun Wang, NASA/GSFC. Written

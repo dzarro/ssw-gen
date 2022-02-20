@@ -3,6 +3,7 @@ pro image2movie, filelist, r, g, b,                                     $
    nodelete=nodelete, cycle=cycle, goes=goes, 				$
    thumbnail=thumbnail, thumbfile=thumbfile, tframes=tframes,   	$
    thumbsize=thumbsize, nothumbnail=nothumbnail,                        $
+   framethumb=framethumb, 						$
    notfilm=notfilm, notlabel=notlabel,                                  $
    table=table, gamma=gamma, reverse=reverse, currentcolor=currentcolor,$
    low=low, high=high, 							$
@@ -12,14 +13,15 @@ pro image2movie, filelist, r, g, b,                                     $
    html_array=html_array,                                              	$
    gif_animate=gif_animate, mpeg=mpeg, _extra=_extra, 			$
    fmt_time=fmt_time, out_style=out_style, loop=loop,                   $
-   java=java, tempfiles=tempfiles,                                      $
+   anis=anis, java=java, tempfiles=tempfiles,                           $
    still=still, tperline=tperline, server=server,                       $
    context=context, ctitle=ctitle, verbatim=verbatim,                   $
-   labstyle=labstyle
+   labstyle=labstyle, maxxy=maxxy, corexy=corexy, $
+   controls=controls, bottom_controls=bottom_controls
 ;+
 ;   Name: image2movie   
 ;
-;   Purpose: convert an image file sequence (3d, gif, jpeg) to mpeg or gif animation
+;   Purpose: convert an image file sequence (3d, gif, jpeg) to desired fmt (mpeg,gif-anim,java,still,javascript)
 ;    
 ;   URL Reference: http://www.lmsal.com/solarsoft/ssw_movie_making.html
 ;
@@ -37,6 +39,8 @@ pro image2movie, filelist, r, g, b,                                     $
 ;      thumbfile - (input/output) thumbnail file name 
 ;      thumbsize - if set, thumbnail frame size (def=64)
 ;      nothumbnail - if set, dont make thumbnail (/THUMBNAIL now the default)
+;      framethumb - also generate a single frame thumb (def=multiframe thumb strip)
+;                  (if -1, selected mid-frame, else desired frame SS 0->1st frame  10000->last frame...)
 ;      uttimes   - UT times of images [ array of lenght(nfiles) ]
 ;                  Can automatically derive from file name ...YYMMDD.HHMM[SS]...
 ;      deltat    - relative times between images (in place of absolute uttimes)
@@ -53,12 +57,14 @@ pro image2movie, filelist, r, g, b,                                     $
 ;                              {ECS,CCSDS,YOHKOH...}                  
 ;      loop -  switch, gif animate only - set loop flag in gif header
 ;
-;      gif,mpeg,java,still - (exclusive) specify output format 
+;      gif,mpeg,java,still,anis - format switches - (exclusive) specify output format 
 ;      context - name of GIF movie context image (ex FD w/movie FOV annotated)
 ;      ctitle - optional title for optional context image
 ;      verbatim - if FILELIST supplied and /VERBATIM , do not regenerate temporary files
 ;      notlabel - if set, dont time stamp thumbnails
 ;      notfilm  - if set, dont put film perferations on film thumbnail.
+;      maxxy - limit size of thumbnail to this -> mkthumb (for example,
+;              for high aspect ratio frames)
 ;
 ;   Calling Sequence:
 ;      IDL> image2movie ,infiles, /gif_animate [,r,g,b, outsize=XY, KEYWORDS..]
@@ -79,7 +85,10 @@ pro image2movie, filelist, r, g, b,                                     $
 ;      IDL> image2movie, filelist, uttimes=timearr, /goes, /label   ; add GOES
 ;
 ;      IDL> image2movie, filelist,/thumbnail, html_array=html_array ; HTML link
-;      IDL> image2movie, data, uttimes=timearr, /java               ; data->files->movie
+;      IDL> image2movie, data, uttimes=timearr, /java               ; data->files->javsscript movie
+;      IDL> image2movie, data, utimes=timarr, /ANIS                 ; same -> Java/AniS 
+;           ( AniS via: http://sohowww.nascom.nasa.gov/solarsoft/gen/idl/http/ssw_javamovie.pro )
+;      
 
 ;   History:
 ;     16-nov-1995 (SLF) - convert sxt2mpeg -> image2mpeg (semi-generic)
@@ -112,12 +121,15 @@ pro image2movie, filelist, r, g, b,                                     $
 ;     14-Jan-2000 (SLF) - eliminate blank thumbnail frames (permit duplicates)
 ;     17-Jan-2000 (SLF) - truncate diagnostic movie commands 
 ;      09-May-2003, William Thompson - Use ssw_strsplit instead of strsplit
+;     12-aug-2008 (SLF) - merge a few enhnancments; maxxy & corexy -> mkthum
+;                         add /ANIS keyword & function (hooks to ssw_javamovie.pro via AniS applet
 ;  
 ;   Restrictions:
 ;      need executables  'whirlgif'                       (gif animations) -OR-
 ;                        'mpeg_encode' and 'giftopnm'     (mpeg) 
 ;                       [distributed in $SSW/packages/binaries/... for most OS]
 ;                       [SEE ssw_bin for info on executables in SSW environment]
+;                       Javascript, Java(/ANIS), and Still formats all *.pro
 ;
 ;      If file names do not include UT TIME (...YYMMDD.HHMM...), it is advisable
 ;      to pass in a DELTA-T or UTTIMES array (or use /deltat if you dont care)
@@ -142,7 +154,8 @@ still=keyword_set(still)
 verbatim=keyword_set(verbatim)
 
 gifanimate=keyword_set(gifanimate) or (1-mpeg)             ; default is gif
-exten=([(['.gif','.mpg'])(mpeg),'.html'])(java or still)
+anis=keyword_set(anis) 
+exten=([(['.gif','.mpg'])(mpeg),'.html'])(java or still or anis)
 
 path_http=get_logenv('path_http')                  
 top_http=get_logenv('top_http')
@@ -150,8 +163,7 @@ top_http=get_logenv('top_http')
 ; need local encoding executables
 encode =ssw_bin((['whirlgif','mpeg_encode'])(mpeg),found=efound,/warning)
 gif2pnm=ssw_bin('giftopnm',found=gfound,/warning)
-
-if (efound*gfound eq 0) and (1-java) and (1-still) then begin
+if (efound*gfound eq 0) and (1-java) and (1-still) and (1-anis) then begin
    message,/info,"Dont have required executables for animation...
    return
 endif
@@ -179,6 +191,7 @@ id=curfid
 newtable=keyword_set(table) or keyword_set(gamma) or keyword_set(reverse)
 goes=keyword_set(goes)
 reverse=keyword_set(reverse)
+tvlct,rr0,gg0,bb0, /get ; preserve original RGB
 
 ; --------- if goes, load a combined table (image + bright plot colors) ----------
 if newtable then begin
@@ -258,6 +271,7 @@ if thumbnail then begin
    if not data_chk(thumbfile,/string,/scalar) then $
       thumbfile=str_replace(movie_name,exten,'_mthumb.gif')
    iconfile=str_replace(thumbfile,'mthumb','micon')  
+   fthumbfile=str_replace(thumbfile,'mthumb','fthumb')   ; single frame thumbname
    ss=grid_data(uttimes,nsamp=tframes<(n_elements(uttimes)-1))  ; 
 endif
 
@@ -297,7 +311,7 @@ if (keyword_set(outsize) or goes or newcolor or thumbnail or $
          if data_chk(labstyle,/string) then begin
 	     estring='align_label,imglab(i),' + labstyle(0)
 	     estat=execute(estring)
-	 endif else xyouts,5,5,imglab(i),/dev            ; original label
+	 endif else xyouts,5,10,imglab(i),/dev            ; original label
          zbuff2file, tempfiles(i),r,g,b,/gif             ; rewrite via zbuff2file
       endif else  write_gif,tempfiles(i),image,r,g,b
 
@@ -318,7 +332,8 @@ endif else begin
       pp(0) eq '': tempfiles=concat_dir(curdir(),newfil) 
       else: tempfiles=newfil
    endcase
-   tdat=mkthumb(ingif=tempfiles(ss),outsize=thumbsize,/nofilm)
+   tdat=mkthumb(ingif=tempfiles(ss),maxxy=maxxy, corexy=corexy,  $
+      outsize=thumbsize,/nofilm)
    tdat=reform(tdat,data_chk(tdat(*,*,0),/nx)/n_elements(ss),$
 	            data_chk(tdat(*,*,0),/ny),n_elements(ss))
 
@@ -333,8 +348,15 @@ if thumbnail then begin
       labtimes=anytim(uttimes(ss),out_style=fmt_time, date=dayonly, time=timeonly,/truncate)
    if goes then tdat=bytscl(tdat,top=!d.table_size-14)+16
    thumb=mkthumb(tdat,r,g,b,outsize=thumbsize,outfile=thumbfile, /frame, $
-         labels=labtimes, nofilm=notfilm , labstyle=labstyle)
-   icon=mkthumb(tdat,r,g,b,outsize=fix(float(thumbsize)*.5),outfile=iconfile,/frame,/nofilm)
+         corexy=corexy, maxxy=maxxy, labels=labtimes, nofilm=notfilm , labstyle=labstyle)
+   if n_elements(thumbsize) eq 0 and n_elements(maxxy) gt 0 then $
+      thumbsize=maxxy
+   icon=mkthumb(tdat,corexy=corexy, maxxy=maxxy, r,g,b,outsize=fix(float(thumbsize)*.5),outfile=iconfile,/frame,/nofilm)
+   if n_elements(framethumb) gt 0 then begin 
+      nmthumb=data_chk(tdat,/nimage)
+      if framethumb eq -1 then fss=nmthumb/2 else fss=framethumb<(nmthumb-1) 
+      fthumb=mkthumb(bytscl(sigrange(tdat(*,*,fss))),r,g,b,outsize=thumbsize*1.3,outfile=fthumbfile,corexy=corexy, /nofilm)
+   endif
 endif
 ; ----------------------------------------------------------------------------
 
@@ -356,7 +378,7 @@ prstr, strjustify(strjustify(tempfiles) + ' ' + $
 
 ; -------------- Movie type specific code --------------------------------------
 if n_elements(ctitle) eq 0 then ctitle='Context Image'
-if java or still then begin
+if java or still or anis then begin
    msize=file_size(tempfiles,/total,/string,/auto)
    break_file,tempfiles,ll,pp,ff,ee,vv
    case 1 of
@@ -368,16 +390,31 @@ if java or still then begin
          mtype='JavaScript'
       endcase
 
+      anis: begin 
+         box_message,'anis,ff,ee,movie_name,name
+         ssw_javamovie,ff+ee,applet,_extra=_extra, $
+            controls=controls, bottom_controls=bottom_controls
+         mdoc=movie_name ; concat_dir(movie_dir,movie_name)
+         html_doc,mdoc,/header
+         file_append,mdoc,applet
+         html_doc,mdoc,/trailer
+         mtype='Java(AniS)'
+
+      endcase
+
       still: begin
          if keyword_set(tperline) then tpl=tperline else tpl=nds < 5
          mtype='Stills'
          tnames=str_replace(tempfiles,'.gif','_mthumb.gif')
          for i=0,nds-1 do out = mkthumb(ingif=tempfiles(i), $
-              outfil=tnames(i),nx=thumbsize(0), label=labels)
+              outfil=tnames(i),nx=thumbsize(0), $
+              corexy=corexy, maxxy=maxxy, label=labels)
 
          stable=str2html(http_names(tempfiles,/rel), $
 	    link_text=str_replace(http_names(tempfiles,/rel),'.gif','_mthumb.gif'),/nopar)
-         stable=str_replace(stable,'</A>','<br><em>') + uttimes +'<br>GIF (' + $
+         glabs=uttimes
+         if n_elements(label) gt 0 then glabs=label
+         stable=str_replace(stable,'</A>','<br><em>') + glabs +'<br>GIF (' + $
 		 file_size(tempfiles,/string,/auto)+')</em></A>'
          embed=strarr(tpl* (nds/tpl+1)) & embed(0)=stable
          table=reform(embed,tpl,n_elements(stable)/tpl+1)
@@ -426,7 +463,7 @@ endif else begin
    if keyword_set(server) then movie_cmd=movie_cmd + ' >& /dev/null'
    prstr,strjustify(['Movie Command',$
 	  strmid(movie_cmd,0,100)+(['','...'])(strlen(movie_cmd) gt 100)],/box),/nomore
-   spawn,movie_cmd,status
+   spawn,str2arr(movie_cmd,' '),/noshell,status
    msize=file_size(movie_name,/string,/auto)
    delete = n_elements(tempfiles) ne 0 and (1-keyword_set(nodelete))
    if delete then file_delete,tempfiles
@@ -458,7 +495,6 @@ if strpos(movie_url,'http://') eq -1 then begin
   movie_url=ssw_strsplit(movie_url,'/',/last,/tail)
   thumburl= ssw_strsplit(thumburl,'/',/last,/tail)
 endif
-
 
 if still then html_array=stillurl else $
    html_array=str2html(movie_url,link=mtitle+'<br> '+ thumburl,/nopara)

@@ -23,6 +23,7 @@
 ;               widget.
 ;
 ; History     :	Version 1, William Thompson, 30-Dec-2015
+;               Version 2, 24-Dec-2019, WTT, added Adjust Pointing option
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -39,6 +40,7 @@ if index lt 0 then begin
     widget_control, sstate.wup, sensitive=0
     widget_control, sstate.wdown, sensitive=0
     widget_control, sstate.wopacity, set_value=0, sensitive=0
+    widget_control, sstate.wadjust, sensitive=0
     widget_control, sstate.wdelete, sensitive=0
 ;
 ;  Otherwise, if not already done, display the information about the selected
@@ -52,6 +54,7 @@ end else if index ne sstate.selected_index then begin
     widget_control, sstate.wup, sensitive=(index gt 0)
     widget_control, sstate.wdown, sensitive=((index+1) lt sstate.nmapped)
     widget_control, sstate.wopacity, set_value=(*pstate).opacity, sensitive=1
+    widget_control, sstate.wadjust, sensitive=1
     widget_control, sstate.wdelete, sensitive=1
 endif
 ;

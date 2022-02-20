@@ -83,6 +83,8 @@
 ;                - added check for WCS fields
 ;               17-Oct-2017, Zarro (ADNET)
 ;                - added /USE_WCS
+;               9-Jan-2019, Zarro (ADNET)
+;                - check for NAXIS3 > 1 in INDEX
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
@@ -210,7 +212,8 @@ for i=0,nimg-1 do begin
   if n_elements(rcenter) eq 2 then roll_center=rcenter else roll_center=rcenter[i,*]
   if use_wcs then begin
    if verbose then mprint,'Using WCS formalism.'
-   wcs_index2map,stc[i],fdata,mapi,/no_copy,err=err 
+   temp=stc[i] & if have_tag(temp,'naxis3') then temp.naxis3=1
+   wcs_index2map,temp,fdata,mapi,/no_copy,err=err 
    if is_string(err) then begin
     mprint,'Index is not WCS-compliant. Using legacy formalism.'
     use_wcs=0b

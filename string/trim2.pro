@@ -25,7 +25,7 @@ function trim2,in,format,flag,_extra=extra
 if n_elements(in) eq 0 then return,''
 if n_elements(flag) eq 0 then flag=2
 flag= 0 > flag < 2
-if n_elements(in) eq 1 then return,strtrim(in(0),flag) else $
+if n_elements(in) eq 1 then return,strtrim(in[0],flag) else $
  return,strtrim(in,flag)
 
 end

@@ -22,6 +22,8 @@
 ;               - added check extra/missing delimiter in path
 ;               22-May-2018, Zarro (ADNET)
 ;               - removed // in output path names.
+;                9-Oct-2019, Zarro (ADNET)
+;               - added RESPONSE_CODE and CODE keywords
 ;-
 
 function sock_dir_ftp_callback, status, progress, data
@@ -36,33 +38,29 @@ return,1 & end
 ;-------------------------------------------------------------------------
 
 pro sock_dir_ftp,url,out_list,err=err,progress=progress,_ref_extra=extra,$
-                     debug=debug
+                     debug=debug,response_code=response_code,code=code
 
 err='' 
 out_list=''
+code=0L
+response_code=0L
 
-if ~since_version('6.4') then begin
- err='Requires IDL version 6.4 or greater.'
+if ~is_url(url,_extra=extra,/scalar,err=err) then return
+if ~is_ftp(url) then begin
+ err='Input URL is not FTP.'
  mprint,err
- return
-endif
-
-if ~is_url(url) then begin
- pr_syntax,'sock_dir_ftp,url'
  return
 endif
 
 durl=url_fix(url,/ftp,_extra=extra)
 
 error=0
-CATCH, error
-IF (error NE 0) THEN BEGIN  
- CATCH, /CANCEL
+catch, error
+if (error ne 0) then begin  
+ catch, /cancel
  if keyword_set(debug) then mprint,err_state()
- err='Remote listing failed.'
  message,/reset
- if obj_valid(ourl) then obj_destroy,ourl
- return
+ goto,bail
 endif
  
 ourl=obj_new('idlneturl2',durl,_extra=extra,debug=debug)
@@ -71,9 +69,16 @@ if keyword_set(progress) then callback_function='sock_dir_ftp_callback'
 
 ;-- start listing 
 
-out_list = ourl->getftpdirlist(/short)
+out_list = ourl->getftpdirlist(/short,_extra=extra)
 
-obj_destroy,ourl
+bail:
+
+if obj_valid(ourl) then begin
+ code=sock_code(ourl,response_code=response_code,err=err,_extra=extra)
+ if is_blank(err) then sock_error,durl,code,response_code=response_code,err=err,_extra=extra
+ obj_destroy,ourl
+ if is_string(err) then return
+endif
 
 ;-- reconstruct full URL
 

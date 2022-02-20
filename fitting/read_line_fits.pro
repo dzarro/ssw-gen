@@ -1,29 +1,57 @@
 
-PRO read_line_fits, fname, struc, shift=shift, stis=stis, vcheck=vcheck, eis=eis
+PRO read_line_fits, fname, struc, shift=shift, stis=stis, vcheck=vcheck, eis=eis, $
+                    line_id_file=line_id_file
 
 ;+
-; NAME
-;
+; NAME:
 ;    READ_LINE_FITS
 ;
-; EXPLANATION
-;
+; PURPOSE:
 ;    The routine spec_gauss_widget outputs Gaussian line fits in a particular
 ;    format. READ_LINE_FITS reads these files and optionally performs line
-;    identifications using CHIANTI.
+;    identifications using CHIANTI. To perform IDs, the routine needs
+;    a line ID file that matches wavelengths against transitions in
+;    CHIANTI. Some standard ID files are already available (see
+;    below). 
 ;
 ;    An earlier version of spec_gauss_widget did not print parameters
 ;    for the background fit. For this reason you will see two options
 ;    below, one for reading the background parameters fits, and one
 ;    that doesn't. 
 ;
-; INPUTS
+; CATEGORY:
+;    Gaussian fitting; input/output.
 ;
-;    FNAME  The name of the file output by SPEC_GAUSS_WIDGET.
+; CALLING SEQUENCE:
+;    READ_LINE_FITS, Fname, Struc
 ;
-; OUTPUTS
+; INPUTS:
+;    Fname: The name of the file output by SPEC_GAUSS_WIDGET.
 ;
-;    STRUC  An IDL structure containing the line fits and identified
+; OPTIONAL INPUTS:
+;    Shift:  If the entire spectrum has a Doppler shift (e.g., from
+;            the radial velocity of star), then the line ID matching
+;            will not work. The SHIFT input is used to fix this. For
+;            example, if the spectrum is shifted by 50 km/s, then
+;            specify shift=50.
+;    Vcheck: A line is identified if it is within +/- VCHECK km/s of the
+;            lab. wavelength of the line that is contained in the line
+;            ID file (see below). Default is 15 km/s.
+;    Line_Id_File:  The name of a file containing CHIANTI line IDs to
+;            be matched against the Gaussian fit file. Default files
+;            are available for HST/STIS and Hinode/EIS - see the /STIS
+;            and /EIS keywords.
+;	
+; KEYWORD PARAMETERS:
+;    STIS:   Use the STIS line ID file for performing line
+;            identifications. This file is automatically downloaded
+;            from the website http://files.pyoung.org.
+;    EIS:    Use the Hinode/EIS line ID file for performing line
+;            identifications. The file is automatically found from the
+;            EIS Solarsoft distribution.
+;
+; OUTPUTS:
+;    Struc  An IDL structure containing the line fits and identified
 ;           transitions. The tags are:
 ;            .wvl  Wavelength
 ;            .swvl 1-sigma error on wavelength
@@ -58,38 +86,26 @@ PRO read_line_fits, fname, struc, shift=shift, stis=stis, vcheck=vcheck, eis=eis
 ;           Note that a number of the tags will only be populated if
 ;           the transition is identified.
 ;
-; KEYWORDS
-;
-;    STIS   Use the STIS line ID file for performing line
-;           identifications.
-;
-;    EIS    Use the Hinode/EIS line ID file for performing line
-;           identifications. 
-;
-; OPTIONAL INPUTS
-;
-;    SHIFT  The radial velocity of the star to apply when performing line
-;           identifications.
-;
-;    VCHECK A line is identified if it is within +/- VCHECK km/s of the
-;           lab. wavelength of the line. Default is 15 km/s.
-;
-; CALLS
-;
+; CALLS:
 ;    READ_LINE_IDS
 ;
-; HISTORY
-;
+; MODIFICATION HISTORY:
 ;    Ver. 1, 27-Oct-2008, Peter Young
 ;    Ver. 2, 22-Apr-2009, Peter Young
 ;       Corrected the reading of the background parameters.
 ;    Ver. 3, 7-Aug-2009, Peter Young
 ;       Made numbers in output structure double precision; updated
 ;       header.
+;    Ver. 4, 31-Jan-2019, Peter Young
+;       Updated header; introduced LINE_ID_FILE= optional input;
+;       corrected the /STIS keyword so that it fetches the STIS ID
+;       file from over the internet.
 ;-
 
+
 IF n_params() LT 2 THEN BEGIN
-  print,'Use:  IDL> read_line_fits, fname, str [, shift=, /stis, /eis, vcheck= ]'
+  print,'Use:  IDL> read_line_fits, fname, str [, shift=, /stis, /eis, vcheck=,'
+  print,'                           line_id_file= ]'
   return
 ENDIF 
 
@@ -101,8 +117,19 @@ ENDIF
 
 IF n_elements(vcheck) EQ 0 THEN vcheck=15.0
 
-IF keyword_set(stis) THEN line_id=getenv('STIS_LINE_IDS')
+
+IF n_elements(line_id_file) NE 0 THEN line_id=line_id_file
+
+IF keyword_set(stis) THEN BEGIN
+  filename='stis_line_ids.txt'
+  url='http://files.pyoung.org/line_ids/'+filename
+  out_dir=getenv('IDL_TMPDIR')
+  sock_get,url,out_dir=out_dir
+  line_id=concat_dir(out_dir,filename)
+ENDIF 
+
 IF keyword_set(eis) THEN line_id=getenv('SSW')+'/hinode/eis/idl/atest/pyoung/eis_line_ids.txt'
+
 
 str={wvl: 0d0, swvl: 0d0, peak: 0d0, speak: 0d0, width: 0d0, swidth: 0d0, $
      int: 0d0, sint: 0d0, ion: '', i: 0, j: 0, trans: '', shift: 0d0, $

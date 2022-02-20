@@ -1,0 +1,30 @@
+; Listing of Detector; Sat #; Start date; End date; Comment; [Additional start date; Additional end date]
+; If additional dates, they're in columns 5,6
+; Call goes_sat_dates function to return this data as a structure
+;
+; Created 23-Sep-2020, Kim Tolbert
+;
+XRS; 91; 01-Jul-1974; 17-Oct-1975; none;
+XRS; 92; 05-Feb-1975; 31-Mar-1978; none;
+XRS; 1; 17-Jan-1976; 01-Jun-1978; none;
+XRS; 2; 01-Aug-1977; 30-Apr-1983; none;
+XRS; 3; 05-Jul-1978; 04-Jan-1980; none;
+XRS; 5; 01-May-1983; 30-May-1983; none; 01-Jul-1983; 31-Jul-1984;
+XRS; 6; 02-Jun-1983; 30-Jun-1983; none; 01-Aug-1984; 18-Aug-1994;
+XRS; 7; 01-Jan-1994; 03-Aug-1996; none;
+XRS; 8; 21-Mar-1996; 18-Jun-2003; none;
+XRS; 9; 20-Mar-1996; 24-Jul-1998; none;
+XRS; 10; 10-Jul-1998; 01-Dec-2009; none;
+XRS; 11; 21-Jun-2006; 11-Feb-2008; none;
+XRS; 12; 13-Dec-2002; 08-May-2007; none;
+XRS; 13; 01-Jun-2013; 14-Dec-2017; in SDAC,YOHKOH, and reprocessed in NOAA archive;
+XRS; 14; 02-Dec-2009; 04-Mar-2020; in SDAC,YOHKOH, and reprocessed in NOAA archive;
+XRS; 15; 01-Sep-2010; 04-Mar-2020; in SDAC,YOHKOH, and reprocessed in NOAA archive;
+XRS; 16; 07-Feb-2017; present; in NOAA archive only;
+XRS; 17; 01-Jun-2018; present; in NOAA archive only;
+;
+EUV; 13; 18-Jun-2006; 27-Oct-2014; very spotty;
+EUV; 14; 06-Apr-2010; 04-Nov-2010; none; 14-Aug-2012; 24-Nov-2012;
+EUV; 15; 07-Apr-2010; 26-Oct-2014; none;
+
+

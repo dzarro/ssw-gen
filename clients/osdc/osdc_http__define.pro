@@ -58,11 +58,19 @@
 ; Revision 1.6  2007/03/05 09:24:14  steinhh
 ; Just checking in...
 ;
+; 7 Jan 2020: Add quiet option, SVHH
+;
 ; Version     : $Revision: 1.14 $$Date: 2009/09/23 10:15:01 $
 ;-
 
-FUNCTION osdc_http::init,server=server
-  default,server,'sdc.uio.no'
+FUNCTION osdc_http::init,server=server,quiet=quiet
+  default,quiet,0
+  self.quiet = quiet
+  
+  ;; Get "preferred" server from environment, or go w/default
+  
+  IF NOT keyword_set(server) THEN server = getenv("OSDC_DB")
+  IF NOT keyword_set(server) THEN server = 'sdc.uio.no'
   
   ;; The http object does *not* handle chunked encoding correctly (correct
   ;; algorithm at the end of this file) as all HTTP 1.1 clients must, so we
@@ -108,7 +116,9 @@ PRO osdc_http::parse,output_in
   line = 0L                         ; Line number we're on
   t =  output_in[line++]            ; Get first line
   reads,t,nret,nmatch
+  IF NOT self.quiet THEN BEGIN
   print,trim(nmatch)+" file(s) match, "+trim(nret)+" lines to be received"
+  END
   self.osdc_nmatch = nmatch
   IF nret EQ 0 THEN BEGIN
      self->close
@@ -147,6 +157,9 @@ PRO osdc_http::parse,output_in
      IF i GE 1 AND ((i+1) MOD 500) EQ 0 THEN $
         message,"Received "+trim(i+1)+"/"+trim(nret)+" lines",/info
   END
+  IF NOT self.quiet THEN BEGIN 
+     message,'All '+trim(nret)+' lines received',/info
+  END
   output_in = temporary(res)
   self->close ;; We're an http 1.0 object - get rid of LUN
 END
@@ -156,7 +169,7 @@ FUNCTION osdc_http::nmatch
 END
 
 PRO osdc_http__define
-  dummy = {osdc_http, inherits http, osdc_nmatch:0L}
+  dummy = {osdc_http, inherits http, osdc_nmatch:0L, quiet:0}
 END
 
 ;  Transfer-Encoding: chunked

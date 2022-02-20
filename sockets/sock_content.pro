@@ -17,11 +17,15 @@
 ;
 ; History     : 2-Oct-2016, Zarro (ADNET) - written
 ;               30-Jan-2017, Zarro (ADNET) - fixed HTTP check
+;               6-May-2021, Zarro (ADNET) - added call to sock_empty
 ;-
 
 pro sock_content,response,_ref_extra=extra
 
-if is_blank(response) then return
+if is_blank(response) then begin
+ sock_empty,_extra=extra     
+ return
+endif
 
 ;-- assume FTP if not HTTP
 

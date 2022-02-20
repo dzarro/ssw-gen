@@ -43,7 +43,13 @@
 ;               Ver 2.2, 30-May-2012, Hourcle.  Fixed docs (vso_get example)
 ;               Ver 2.3, 22-Apr-2013, Zarro. Added COUNT output keyword
 ;               Ver 2.4, 31-Jul-2017, Zarro. Made DATE keyword explicit
-;                        08-Aug-2018, ARD. Modified contact
+;               Ver 2.5, 05-Sep-2018, Davey. Added /sort option to sort
+;                        returned VSO structure data by time.start.
+;                        05-Sep-2018, Davey. Updated contact
+;                        information.
+;                        15-Jan-2018,Zarro. Replaced /NULL in SORT/WHERE
+;                        call with COUNT as NULL not supported in pre-version 8.
+; 
 ;
 ; Contact     : help@virtualsolar.org
 ;               http://virtualsolar.org/
@@ -129,7 +135,7 @@
 ;   for expanding these 'summary' records into individual observations
 ;   in the future.
 ; * If you have a query that's not returning what you're expecting,
-;   please contact :  help@virtualsolar.org
+;   please contact :  joseph.a.hourcle AT nasa.gov
 ;   (and make sure to send the query!)
 ;
 ; Source / Instrument / Detector / Phys. Obs. / Layout / Extent Tye / etc:
@@ -205,7 +211,6 @@ function vso_search, tstart,tend, urls=urls, help=help, count=count,$
 
         query = vso->buildquery(tstart,tend,date=date,_extra=extra )
         records = vso->query(query, _extra=extra)
-
 ;-- check for results
 
         err_msg='no matching records found'
@@ -214,7 +219,13 @@ function vso_search, tstart,tend, urls=urls, help=help, count=count,$
           contents=records->contents()
           if ( keyword_set(urls) ) then $
            contents=vso->getdata(contents, /merge, _extra=extra )
-          count=n_elements(contents)
+           count=n_elements(contents)
+
+	  if (n_elements(extra) gt 0) then begin
+	   myindex = where(extra eq 'SORT',scount)
+	   if (scount gt 0) && (count gt 1) then contents = contents[sort(contents.time.start)]
+	  endif
+
          endif else message,err_msg,/cont
         endif else message,err_msg,/cont
 

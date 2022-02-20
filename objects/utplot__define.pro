@@ -43,9 +43,15 @@
 ;                - in tim2secs, check first finite time for
 ;                  double(times) eq time
 ;               19-Feb-2012, Zarro (ADNET)
-;                 - changed message,/cont to message,/info because
+;                 - changed message,/cont to mprint,/info because
 ;                   /cont was setting !error_state
 ;               15-Nov-2017, Kim. Call extract_arrays from set if input is in structure.
+;               25-Sep-2019, Zarro (ADNET) 
+;               - check if input is structure before checking for NaN
+;               - replaced all calls to anytim2utc to anytim
+;               4-Feb-2020, Zarro (ADNET)
+;               - changed "or" to ||, "and" to &&, and message to
+;                 mprint
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
@@ -92,8 +98,10 @@ function utplot::get,_ref_extra=extra,timerange=timerange,status=status
     xrange=self->xyplot::get(/xrange)
     if ~valid_range(xrange) then xrange=self->get_def_xrange()
     if valid_range(xrange) then begin
-      utbase=anytim2tai(self.utbase)
-      return,anytim2utc(utbase+xrange,/vms)
+ ;     utbase=anytim2tai(self.utbase)
+ ;     return,anytim2utc(utbase+xrange,/vms)
+     utbase=anytim(self.utbase,/tai)
+     return,anytim(fid='tai',utbase+xrange,/vms)
     endif
   endif
 
@@ -126,7 +134,7 @@ pro utplot::set,times=times,data=data,_ref_extra=extra,$
   if keyword_set(input_struct) then begin
     self->extract_arrays, inp=input_struct, xdata=xdata, ydata=ydata, edata=edata, status=status, err_msg=err_msg
     if ~status then begin
-      message,err_msg,/info
+      mprint,err_msg,/info
       return
     endif
     if exist(edata) then self->xyplot::set,edata=edata
@@ -146,7 +154,7 @@ pro utplot::set,times=times,data=data,_ref_extra=extra,$
 
   if is_string(extra) then self->xyplot::set,_extra=extra
   ; /zero added 10-jun-05 kim !!!!
-  if ~exist(times) and ~exist(xdata) and valid_time(utbase,/zero) then self->set_utbase,utbase
+  if ~exist(times) && ~exist(xdata) && valid_time(utbase,/zero) then self->set_utbase,utbase
 
   if exist(timerange) then self->set_trange,timerange
 
@@ -167,11 +175,13 @@ function utplot::tim2secs,times,tai=tai,secs=secs,utbase=utbase,err_msg=err_msg,
 
   err_msg=''
 
-  fin = where(finite(times), nfinite)
-  if nfinite eq 0 then begin
+  if ~is_struct(times) then begin
+   fin = where(finite(times), nfinite)
+   if nfinite eq 0 then begin
     err_msg = 'No input times are finite.'
-    message,err_msg, /info
+    mprint,err_msg, /info
     return,0
+   endif
   endif
 
   ;-- if seconds since UTBASE, check UTBASE was passed
@@ -181,7 +191,7 @@ function utplot::tim2secs,times,tai=tai,secs=secs,utbase=utbase,err_msg=err_msg,
       utbase=self->get(/utbase)
       if ~valid_time(utbase,/zero) then begin		; /zero added 10-jun-05 kim !!!!
         err_msg='Missing UTBASE'
-        message,err_msg,/info
+        mprint,err_msg,/info
         return,0
       endif
     endif
@@ -211,11 +221,11 @@ function utplot::tim2secs,times,tai=tai,secs=secs,utbase=utbase,err_msg=err_msg,
   time = reform(anytim(times, error=error))
   if error then begin
     err_msg='Invalid input TIMES'
-    message,err_msg,/info
+    mprint,err_msg,/info
     return,0
   endif
 
-  ; first time may be NaN, so check first finite time (changed times[0] to times[fin[0]]), 9-nov-2011
+ ; first time may be NaN, so check first finite time (changed times[0] to times[fin[0]]), 9-nov-2011
   if ~is_struct(times) && (n_elements(times) eq n_elements(time)) && $
     (double(times[fin[0]]) eq time[fin[0]]) then begin
 
@@ -260,8 +270,8 @@ end
 pro utplot::set_utbase,utbase,tai=tai
 
   if valid_time(utbase, /zero) then begin		; /zero added 10-jun-05 kim !!!!
-    if ~is_number(utbase) or keyword_set(tai) then $
-      self.utbase=anytim2utc(utbase,/vms) else $
+    if keyword_set(tai) then $
+     self.utbase=anytim(fid='tai',utbase,/vms) else $
       self.utbase=anytim(utbase,/vms)
     return
   endif

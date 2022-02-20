@@ -118,6 +118,12 @@
 ;                 works (file_info was introduced in 5.5)
 ;               17-Aug-2009, Kim Tolbert.  xtext doesn't free its info structure if it's called from
 ;                 another routine. So in call to xtext, use unseen keyword, which returns info, and free it.
+;               03-Dec-2019, Kim Tolbert. On some Windows systems, spawning diffnew.pl failed until added 'perl'
+;                 to beginning of spawn command.
+;               11-aug-2020, rschwartz70@gmail.com, only use first two filenames even if more are submitted
+;               and issue warning to console, finished replacing () with [] for arrays to eliminate namespace
+;               conflicts
+;               
 ;
 ; Version     : 4, 30 August 2002
 ;-
@@ -128,13 +134,13 @@ PRO xdiff_parse4,str,sep,n1,n2,n3,n4
 
   sep = str_sep(str,sep)
 
-  s12 = str_sep(sep(0),',')
+  s12 = str_sep(sep[0],',')
 
-  n1 = LONG(s12(0))
+  n1 = LONG(s12[0])
   n2 = LONG(s12(N_ELEMENTS(s12)-1))
 
-  s34 = str_sep(sep(1),',')
-  n3 = LONG(s34(0))
+  s34 = str_sep(sep[1],',')
+  n3 = LONG(s34[0])
   n4 = LONG(s34(N_ELEMENTS(s34)-1))
 
 END
@@ -154,12 +160,12 @@ FUNCTION xdiff_rempath,path,file
 
   goodix = WHERE(STRPOS(cpath,foundpath) EQ -1,count)
   IF count EQ -1 THEN BEGIN
-     PRINT,"What's wrong with your !path"
-     RETURN,path
+    PRINT,"What's wrong with your !path"
+    RETURN,path
   END
   ;; Gather new path
   cpath = cpath(goodix)
-  npath = cpath(0)
+  npath = cpath[0]
   FOR i = 1,N_ELEMENTS(cpath)-1 DO npath =  npath + ':'+ cpath(i)
   RETURN,npath
 END
@@ -220,41 +226,42 @@ PRO xdiff,file, flags, skip=skip, font=font, $
 
   flags = str_sep(flags,' ')
 
-
-  IF N_ELEMENTS(file) GT 2 THEN BEGIN
-     PRINT,"Can only compare 2 files at a time"
-     RETURN
+  file_use = file
+  IF N_ELEMENTS(file_use) GT 2 THEN BEGIN
+    PRINT,"Can only compare 2 files at a time, using the first two filenames"
+    file_use = file_use[0:1]
+    ;RETURN
   END
 
   ;; Find the current one (first in path)
 
-  curf = find_with_def(file(0),!Path,'.pro')
+  curf = find_with_def(file_use[0],!Path,'.pro')
 
   IF curf EQ '' THEN BEGIN
-     PRINT,"File not found:" + file(0)
-     RETURN
+    PRINT,"file not found:" + file_use[0]
+    RETURN
   END
 
-  IF N_ELEMENTS(file) EQ 1 THEN BEGIN
-     path = xdiff_rempath(!path,curf)
-     nextf = find_with_def(file,path,'.pro',/nocurrent)
+  IF N_ELEMENTS(file_use) EQ 1 THEN BEGIN
+    path = xdiff_rempath(!path,curf)
+    nextf = find_with_def(file_use,path,'.pro',/nocurrent)
 
-     WHILE skip GT 0 DO BEGIN
-        path = xdiff_rempath(path,nextf)
-        nextf = find_with_def(file,path,'.pro',/nocurrent)
-        skip = skip-1
-     END
+    WHILE skip GT 0 DO BEGIN
+      path = xdiff_rempath(path,nextf)
+      nextf = find_with_def(file_use,path,'.pro',/nocurrent)
+      skip = skip-1
+    END
   END ELSE BEGIN
-     nextf = find_with_def(file(1),!path,'.pro')
-     IF nextf EQ '' THEN BEGIN
-        PRINT,"File not found:"+file(1)
-        RETURN
-     END
+    nextf = find_with_def(file_use[1],!path,'.pro')
+    IF nextf EQ '' THEN BEGIN
+      PRINT,"file not found:"+file_use[1]
+      RETURN
+    END
   END
 
-  IF nextf(0) EQ '' THEN BEGIN
-     PRINT,"Only one copy found"
-     RETURN
+  IF nextf[0] EQ '' THEN BEGIN
+    PRINT,"Only one copy found"
+    RETURN
   END
 
   n_real=nextf
@@ -322,16 +329,16 @@ PRO xdiff,file, flags, skip=skip, font=font, $
     ; to run the perl program diffnew.pl we MUST be in the $SSW/gen/perl directory
     temp_dir=curdir()
     cd, chklog('SSW') + '\gen\perl'
-    spawn, /hide, ['diffnew.pl ', nextf, curf], result
+    spawn, /hide, ['perl diffnew.pl ', nextf, curf], result  ; added perl to start of command, Kim. 03-dec-2019
     cd, temp_dir
 
   ENDIF
 
-  IF result(0) EQ '' THEN BEGIN
-     PRINT,"No differences found between files:"
-     PRINT,n_real
-     PRINT,c_real
-     GOTO, cleanup
+  IF result[0] EQ '' THEN BEGIN
+    PRINT,"No differences found between files:"
+    PRINT,n_real
+    PRINT,c_real
+    GOTO, cleanup
   END
 
   stato = intarr(N_ELEMENTS(org))
@@ -346,125 +353,125 @@ PRO xdiff,file, flags, skip=skip, font=font, $
   WHILE i LT nres DO BEGIN
 
 
-     ccom = result(i)
-     IF STRPOS(ccom,"a") NE -1 THEN BEGIN
-        xdiff_parse4,ccom,'a',n1,n2,n3,n4
-        xdiff_add,org,cur,n1,n2,n3,n4,oadded,cadded
-     END ELSE IF STRPOS(ccom,"d") NE -1 THEN BEGIN
-        xdiff_parse4,ccom,'d',n1,n2,n3,n4
-        xdiff_add,cur,org,n3,n4,n1,n2,cadded,oadded
-     END ELSE IF STRPOS(ccom,"c") NE -1 THEN BEGIN
-        xdiff_parse4,ccom,'c',n1,n2,n3,n4
-        nn1 = n1 + oadded
-        nn2 = n2 + oadded
-        nn3 = n3 + cadded
-        nn4 = n4 + cadded
-        ochange = n2-n1
-        cchange = n4-n3
-        delta = cchange - ochange
-        both = ochange < cchange
-        org(nn1-1:nn1+both-1) = '<c>' + org(nn1-1:nn1+both-1)
-        cur(nn3-1:nn3+both-1) =  '<c>' + cur(nn3-1:nn3+both-1)
-        IF delta GT 0 THEN BEGIN
-           xdiff_add,org,cur,n1+both,n1+both,n3+both+1,n4,oadded,cadded
-           ;org=[org(0:n2-1),REPLICATE('|+|',delta),org(n2:*)]
-           ;oadded = oadded + delta
-           ;cur(n3+both:n4-1) = '|x|' + cur(n3+both:n4-1)
-        END
-        IF delta LT 0 THEN BEGIN
-           xdiff_add,cur,org,n3+both,n3+both,n1+both+1,n2,cadded,oadded
-           ;cur=[cur(0:n4-1),REPLICATE('|-|',-delta),cur(n4:*)]
-           ;cadded = cadded - delta
-           ;org(n1+both:n2-1) = '|+|' + org(n1+both:n2-1)
-        END
-     END
+    ccom = result[i]
+    IF STRPOS(ccom,"a") NE -1 THEN BEGIN
+      xdiff_parse4,ccom,'a',n1,n2,n3,n4
+      xdiff_add,org,cur,n1,n2,n3,n4,oadded,cadded
+    END ELSE IF STRPOS(ccom,"d") NE -1 THEN BEGIN
+      xdiff_parse4,ccom,'d',n1,n2,n3,n4
+      xdiff_add,cur,org,n3,n4,n1,n2,cadded,oadded
+    END ELSE IF STRPOS(ccom,"c") NE -1 THEN BEGIN
+      xdiff_parse4,ccom,'c',n1,n2,n3,n4
+      nn1 = n1 + oadded
+      nn2 = n2 + oadded
+      nn3 = n3 + cadded
+      nn4 = n4 + cadded
+      ochange = n2-n1
+      cchange = n4-n3
+      delta = cchange - ochange
+      both = ochange < cchange
+      org[nn1-1:nn1+both-1] = '<c>' + org[nn1-1:nn1+both-1]
+      cur[nn3-1:nn3+both-1] =  '<c>' + cur[nn3-1:nn3+both-1]
+      IF delta GT 0 THEN BEGIN
+        xdiff_add,org,cur,n1+both,n1+both,n3+both+1,n4,oadded,cadded
+        ;org=[org(0:n2-1),REPLICATE('|+|',delta),org(n2:*)]
+        ;oadded = oadded + delta
+        ;cur(n3+both:n4-1) = '|x|' + cur(n3+both:n4-1)
+      END
+      IF delta LT 0 THEN BEGIN
+        xdiff_add,cur,org,n3+both,n3+both,n1+both+1,n2,cadded,oadded
+        ;cur=[cur(0:n4-1),REPLICATE('|-|',-delta),cur(n4:*)]
+        ;cadded = cadded - delta
+        ;org(n1+both:n2-1) = '|+|' + org(n1+both:n2-1)
+      END
+    END
 
-     i = i+1
+    i = i+1
 
-     WHILE STRPOS("<->",STRMID(result(i),0,1)) NE -1 AND i LT nres-1 DO $
-        i = i+1
+    WHILE STRPOS("<->",STRMID(result[i],0,1)) NE -1 AND i LT nres-1 DO $
+      i = i+1
 
-     IF STRPOS("<->",STRMID(result(i),0,1)) NE -1 THEN i = i+1
+    IF STRPOS("<->",STRMID(result[i],0,1)) NE -1 THEN i = i+1
   END
 
   ix = WHERE(STRMID(org,0,1) NE '<',count)
-  IF count GT 0 THEN org(ix) = '| |'+org(ix)
+  IF count GT 0 THEN org[ix] = '| |'+org[ix]
 
   ix = WHERE(STRMID(cur,0,1) NE '<',count)
-  IF count GT 0 THEN cur(ix) = '| |'+cur(ix)
+  IF count GT 0 THEN cur[ix] = '| |'+cur[ix]
 
   org = byte(org)
   ix = WHERE(org EQ 0b,count)
-  IF count GT 0 THEN org(ix) = 32b
+  IF count GT 0 THEN org[ix] = 32b
 
 
   cur = byte(cur)
   ix = WHERE(cur EQ 0b,count)
-  IF count GT 0 THEN cur(ix) = 32b
+  IF count GT 0 THEN cur[ix] = 32b
 
-  if (size(cur))(1) gt maxchars then cur = cur(0:maxchars-1, *)
-  if (size(org))(1) gt maxchars then org = org(0:maxchars-1, *)
-  xsize = (SIZE(cur))(1) + (SIZE(org))(1)
+  if (size(cur))[1] gt maxchars then cur = cur(0:maxchars-1, *)
+  if (size(org))[1] gt maxchars then org = org(0:maxchars-1, *)
+  xsize = (SIZE(cur))[1] + (SIZE(org))[1]
 
   IF getenv("USER") EQ 'steinhh' THEN  font =  $
-     '-schumacher-clean-medium-r-normal-*-8-*-*-*-*-50-iso8859-1'
+    '-schumacher-clean-medium-r-normal-*-8-*-*-*-*-50-iso8859-1'
 
-IF os_family() EQ 'Windows' THEN BEGIN
-	DEVICE, GET_FONTNAMES=dfnames, SET_FONT='6x13'
-	IF dfnames(0) EQ '6x13' THEN font = '6x13' ELSE font='fixedsys'
-ENDIF
+  IF os_family() EQ 'Windows' THEN BEGIN
+    DEVICE, GET_FONTNAMES=dfnames, SET_FONT='6x13'
+    IF dfnames[0] EQ '6x13' THEN font = '6x13' ELSE font='fixedsys'
+  ENDIF
 
-; figure out number of groups of changes for original and current, and include
-; number in xtext title
-; first change anything that's not a blank in column 1 to a # to make it easier
-org_sym = org(1,*)
-cur_sym = cur(1,*)
-q = where (org_sym ne 32b) & org_sym(q) = 35b
-q = where (cur_sym ne 32b) & cur_sym(q) = 35b
+  ; figure out number of groups of changes for original and current, and include
+  ; number in xtext title
+  ; first change anything that's not a blank in column 1 to a # to make it easier
+  org_sym = org[1,*]
+  cur_sym = cur[1,*]
+  q = where (org_sym ne 32b) & org_sym[q] = 35b
+  q = where (cur_sym ne 32b) & cur_sym[q] = 35b
 
-find_changes, org_sym, indo, sto
-find_changes, cur_sym, indc, stc
-q = where (sto ne 32b, counto)
-q = where (stc ne 32b, countc)
-counto = ' (' + strtrim(counto,2) + ')'
-countc = ' (' + strtrim(countc,2) + ')'
+  find_changes, org_sym, indo, sto
+  find_changes, cur_sym, indc, stc
+  q = where (sto ne 32b, counto)
+  q = where (stc ne 32b, countc)
+  counto = ' (' + strtrim(counto,2) + ')'
+  countc = ' (' + strtrim(countc,2) + ')'
 
-; if user wanted to just show the changed lines with a window around them, find the
-; indices of the changed lines, expand them by window, and separate each section
-; with a  blank line, a line of '-------' followed by another blank.
-if exist(context) then begin
-   ; if first change is a blank, don't use it (not a real change)
-   if sto[0] eq 32b then indo = indo[1:*]
-   ; if remaining number of
-   ; elements of indo is not even, then last change must have been at end of array,
-   ; so add another element that is last index.  (need even, so we can pair up start/end)
-   if (n_elements(indo) mod 2) ne 0 then indo = [indo, n_elements(org(0,*))]
-   z = reform(indo,2,(n_elements(indo))/2.)
-   z[0,*] = (z[0,*] - context) > 0
-   z[1,*] = (z[1,*] + context - 1) < (n_elements(org(0,*))-1)
-   ; after expanding by context, might overlap - get ranges without overlaps.
-   z = find_contig_ranges(z)
-   leno = (size(org))(1)
-   lenc = (size(cur))(1)
-   sep = '---------------'
-   for i=0,n_elements(z(0,*))-1 do begin
-      sub_org = append_arr(sub_org, [string(org(*,z(0,i):z(1,i))), '', strpad(sep,leno,/after), ''])
-      sub_cur = append_arr(sub_cur, [string(cur(*,z(0,i):z(1,i))), '', strpad(sep,lenc,/after), ''])
-   endfor
-   xtext,sub_org+' '+sub_cur,xsize=xsize,font=font,$
-     title = n_real + counto + '     ==>    ' + c_real + countc, unseen=unseen
-endif else begin
-   xtext,STRING(org)+' '+STRING(cur),xsize=xsize,font=font,$
-     title = n_real + counto + '     ==>    ' + c_real + countc, unseen=unseen
-endelse
+  ; if user wanted to just show the changed lines with a window around them, find the
+  ; indices of the changed lines, expand them by window, and separate each section
+  ; with a  blank line, a line of '-------' followed by another blank.
+  if exist(context) then begin
+    ; if first change is a blank, don't use it (not a real change)
+    if sto[0] eq 32b then indo = indo[1:*]
+    ; if remaining number of
+    ; elements of indo is not even, then last change must have been at end of array,
+    ; so add another element that is last index.  (need even, so we can pair up start/end)
+    if (n_elements(indo) mod 2) ne 0 then indo = [indo, n_elements(org(0,*))]
+    z = reform(indo,2,(n_elements(indo))/2.)
+    z[0,*] = (z[0,*] - context) > 0
+    z[1,*] = (z[1,*] + context - 1) < (n_elements(org(0,*))-1)
+    ; after expanding by context, might overlap - get ranges without overlaps.
+    z = find_contig_ranges(z)
+    leno = (size(org))[1]
+    lenc = (size(cur))[1]
+    sep = '---------------'
+    for i=0,n_elements(z[0,*])-1 do begin
+      sub_org = append_arr(sub_org, [string(org(*,z[0,i]:z[1,i])), '', strpad(sep,leno,/after), ''])
+      sub_cur = append_arr(sub_cur, [string(cur(*,z[0,i]:z[1,i])), '', strpad(sep,lenc,/after), ''])
+    endfor
+    xtext,sub_org+' '+sub_cur,xsize=xsize,font=font,$
+      title = n_real + counto + '     ==>    ' + c_real + countc, unseen=unseen
+  endif else begin
+    xtext,STRING(org)+' '+STRING(cur),xsize=xsize,font=font,$
+      title = n_real + counto + '     ==>    ' + c_real + countc, unseen=unseen
+  endelse
 
-cleanup:
-; remove temporary files
-if made_temp then begin
-  free_var, unseen  ; free pointer to info structure from xtext widget
-  rm_file, n_temp
-  rm_file, c_temp
-endif
+  cleanup:
+  ; remove temporary files
+  if made_temp then begin
+    free_var, unseen  ; free pointer to info structure from xtext widget
+    rm_file, n_temp
+    rm_file, c_temp
+  endif
 
 END
 

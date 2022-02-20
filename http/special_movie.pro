@@ -2,14 +2,16 @@ pro special_movie,  index,  data,  r, g, b, movie_name=movie_name, $
      debug=debug,  _extra=_extra, movie_dir=movie_dir, $
      movie_text=movie_text, grid_minutes=grid_minutes, nolabel=nolabel, $
      local=local, html=html, no_htmldoc=no_htmldoc, outsize=outsize, $
-     context=context, ctitle=ctitle, thumbsize=thumbsize, filter=filter
+     context=context, ctitle=ctitle, filter=filter,$
+     no_gifanimate=no_gifanimate, anis_java=anis_java, $
+     flanis=flanis, flash=flash
 ;+
 ;   Name: special_movie
 ;
 ;   Purpose: make sxt movies for WWW (just set up and call image2movie)
 ;
 ;   EXAMPLE: REPRESENTATIVE OUTPUT FROM SPECIAL_MOVIE IS AVAILABLE AT: 
-;      http://www.lmsal.com/SXT/movies/lastsfd.html
+;      http://www.lmsal.com/solarsoft/ssw_movie_making.html
 ;
 ;   Input Parameters:
 ;      index - time structures (any SSW format)     
@@ -34,6 +36,8 @@ pro special_movie,  index,  data,  r, g, b, movie_name=movie_name, $
 ;      context - if set, name(s) of context files to include
 ;                if 1 element - inline html
 ;                if 2 element - assumed thumbnaile/full
+;      no_gifanimate - if set, only JS&Mpeg
+;      anis_java (switch) - if set ,include AniS Java version
 ;  
 ;
 ;
@@ -56,6 +60,8 @@ pro special_movie,  index,  data,  r, g, b, movie_name=movie_name, $
 ;      11-Aug-1999  (S.L.Freeland) - movie_dir pass through!, only filter data on request
 ;      11-Nov-1999  (S.L.Freeland) - improved appearence of output HTML
 ;      09-May-2003, William Thompson - Use ssw_strsplit instead of strsplit
+;      23-may-2008  (S.L.Freeland) - add /NO_GIFANIMATE switch
+;      12-aug-2008  S.L.Freeland - add /ANIS_JAVA keyword 
 ;  
 ;   NOTE: Movie making Brains are in <image2movie.pro> - this is just
 ;   a convenient wrapper which calls that routine once for each of 
@@ -102,19 +108,28 @@ endif
 ; -----------------------------------------------------------
 
 if keyword_set(filter) then quality_filter, index, data                  ; filter out bad frames
+flash=keyword_set(flash) or keyword_set(flanis)
+anis=keyword_set(anis_java) or flash
+nogif=keyword_set(no_gifanimate) or anis ; /ANIS implies /NO_GIFANIMATE
 
-mtype=str2arr('java,gif,mpeg')             ; formats to include
-
+case 1 of 
+   anis: mtype=str2arr('java,anis,mpeg')
+   nogif: mtype=str2arr('java,mpeg')
+   else: mtype='java,gif,mpeg'  ; historical default 
+endcase
+   
 ; ----- generate movies, one  per mtype via image2movie.pro -------------
 if not keyword_set(nolabel) then label=anytim(index,out='ECS')
 
 if n_elements(ctitle) eq 0 then ctitle='Context Image'
-
 for i=0, n_elements(mtype)-1 do begin           ; for each movie output fmt...
+if debug then stop,"preimage2movie,mtype[i],concat_dir(movie_dir,mroot+'_'+strmid(mtype(i),0,1))"
    image2movie,data,r,g,b,  /nodelete, $
        movie_name=concat_dir(movie_dir,mroot+'_'+strmid(mtype(i),0,1)), $
-       uttimes=index, label=label, /inctime, thumbsize=thumbsize, $
+       uttimes=index, label=label, /inctime, $
+       debug=debug, $
        _extra=_extra, html=html, movie_dir=movie_dir, $
+       anis=(mtype(i) eq 'anis'), $
        java=(mtype(i) eq 'java'), mpeg=(mtype(i) eq 'mpeg'), $, $
        loop=(mtype(i) eq 'gif'),  gif=(mtype(i) eq 'gif'), outsize=outsize, $
        context=context, ctitle=ctitle, tempfiles=tempfiles, verbatim=(i ne 0)  
@@ -127,7 +142,6 @@ endfor
 data=temporary(idata)                          ; return pristine input
 
 ; -----------------------------------------------------------
-
 ;  ----------- reformat HTML for 3 format table -----------------
 thumb=strextract(newhtml(2),'<IMG SRC','>',/include)   ;gif thumb
 case n_elements(context) of
@@ -144,8 +158,17 @@ head=[thumb,newhtml(1),strextract(newhtml(2),'Fram','<br>',/inc),'<br>']
 ; ------ make table out of movie URLs --------
 movstats=strextract(newhtml(2),'Fram','<br>',/inc)
 movurls=ssw_strsplit(newhtml([2,4,6]),'Frame Size')+'</B></A>'
+if n_elements(mtype) eq 2 then movurls=movurls(0:1)
 movtable=strtab2html(movurls,pad=1,spac=1,border=1)
 ; ---------------------------------------------
+
+if flash then begin 
+   aname=movie_name+'_a.html'
+   amovie=concat_dir(movie_dir,aname)
+   ssw_anis2flanis,amovie
+   movtable(1)=str_replace(movtable(1),'a.html','f.html')
+   movtable(1)=str_replace(movtable(1),'Java(AniS)','Flash(FlAniS)')
+endif
 
 ; --- Main Table (movie statistics / thumbnail / movie links) ---
 movstats=arr2str([newhtml(1),movstats],'')

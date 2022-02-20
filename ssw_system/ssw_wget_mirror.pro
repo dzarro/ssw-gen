@@ -61,6 +61,7 @@ function ssw_wget_mirror, geturls, outdirs,  $
 ;                    (different algorithm/switches and ~better)
 ;      12-nov-2007 - S.L.Freeland - made /new_paradigm the default and
 ;                    added /old_paradigm
+;      26-Aug-2019 - W.T.Thompson - use SSW_WGET_CLEANUP2
 ;-
 ;
 case 1 of 
@@ -121,7 +122,7 @@ if keyword_set(spawn) then begin
    for i=0,nurl-1 do begin 
      cd,outdirs(i)
      espawn, wcmd(i)
-     if cleanup then ssw_wget_cleanup,outdirs(i) ; remove residual wget crap
+     if cleanup then ssw_wget_cleanup2,outdirs[i],geturls[i] ; remove residual wget crap
    endfor
    cd,cur
 endif

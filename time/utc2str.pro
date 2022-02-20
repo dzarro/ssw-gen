@@ -1,6 +1,6 @@
 	FUNCTION UTC2STR, UTC, ECS=ECS, VMS=VMS, STIME=STIME,	$
 		TRUNCATE=TRUNCATE, DATE_ONLY=DATE_ONLY, TIME_ONLY=TIME_ONLY, $
-		UPPERCASE=UPPERCASE,ERRMSG=ERRMSG,NOZ=K_NOZ
+		UPPERCASE=UPPERCASE,ERRMSG=ERRMSG,NOZ=K_NOZ, DOY=DOY
 ;+
 ; Project     :	SOHO - CDS
 ;
@@ -67,6 +67,10 @@
 ;
 ;		STIME	  = If set, then the output will be in STIME format, as
 ;			    described above.
+;
+;		DOY	  = Return with DOY format like
+;
+;			"1988:018 17:20:43.123"
 ;
 ;		Only one of the above keywords can be set.  If none of them are
 ;		set, then the output is in CCSDS format.
@@ -146,9 +150,12 @@
 ;               Version 11, William Thompson, GSFC, 25-Oct-2005
 ;                       Interpret any structure with tags MJD and TIME as CDS
 ;                       internal time.
-;               Version 12, Kim Tolbert, 13-Jan-2014, Change () to [] to avoid confusion with DATE routine.
+;               Version 12, Kim Tolbert, 13-Jan-2014, Change () to [] to avoid
+;                       confusion with DATE routine.
+;		Version 13, Nathan Rich, NRL, 12 Aug 2020
+;			Add /DOY
 ;
-; Version     :	Version 11, 25-Oct-2005
+; Version     :	Version 13, 12-Aug-2020
 ;-
 ;
 	ON_ERROR, 2  ; Return to the caller of this procedure if error occurs.
@@ -187,7 +194,7 @@
 		DATE[I1:I2] = UTC2STR(UTC[I1:I2], ECS=ECS, VMS=VMS,	$
 			STIME=STIME, TRUNCATE=TRUNCATE, DATE_ONLY=DATE_ONLY, $
 			TIME_ONLY=TIME_ONLY, UPPERCASE=UPPERCASE,	$
-			ERRMSG=MESSAGE, NOZ=NOZ)
+			ERRMSG=MESSAGE, NOZ=NOZ, DOY=DOY)
 		IF MESSAGE NE '' THEN GOTO, HANDLE_ERROR
 		I1 = I2 + 1
 	    ENDWHILE
@@ -219,7 +226,12 @@
 		DATE =	STRING(UT.DAY, FORMAT='(I2)') + S1 +	$
 			MONTH(UT.MONTH-1) + S1 +		$
 			STRMID(STRTRIM(10000+UT.YEAR,2),1,4)
-	END ELSE BEGIN
+	ENDIF ELSE IF KEYWORD_SET(DOY) THEN BEGIN
+		dayn = utc2doy(utc)
+		DATE =	STRMID(STRTRIM(10000+UT.YEAR,2),1,4) + ":"  +	$
+			string(dayn,'(i03)')
+		S2 = ' '
+	ENDIF ELSE BEGIN
 		DATE =	STRMID(STRTRIM(10000+UT.YEAR,2),1,4) + S1  +	$
 			STRMID(STRTRIM(100+UT.MONTH ,2),1,2) + S1  +	$
 			STRMID(STRTRIM(100+UT.DAY   ,2),1,2)

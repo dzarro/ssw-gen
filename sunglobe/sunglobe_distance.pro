@@ -1,7 +1,7 @@
 ;+
 ; Project     :	ORBITER - SPICE
 ;
-; Name        :	SUNGLOBE_ORIENT
+; Name        :	SUNGLOBE_DISTANCE
 ;
 ; Purpose     :	Called from SUNGLOBE_EVENT to control perspective.
 ;
@@ -11,7 +11,7 @@
 ;               update the perspective of the globe based on the distance
 ;               value.
 ;
-; Syntax      :	SUNGLOBE_ORIENT, SSTATE
+; Syntax      :	SUNGLOBE_DISTANCE, SSTATE
 ;
 ; Examples    :	See sunglobe_event.pro
 ;
@@ -20,6 +20,7 @@
 ; Calls       :	SUNGLOBE_PARSE_TMATRIX
 ;
 ; History     :	Version 1, 7-Jan-2016, William Thompson, GSFC
+;               Version 2, 10-Apr-2019, WTT, corrected documentation
 ;
 ; Contact     :	WTHOMPSON
 ;-

@@ -2,11 +2,12 @@
 ; Document name: find_limb2.pro
 ; Created by:    Liyun Wang, GSFC/ARC, October 7, 1994
 ;
-; Last Modified: Fri Oct  7 10:36:29 1994 (lwang@orpheus.gsfc.nasa.gov)
+; Last Modified: Wed Jul 21 11:51:55 2021 (germerott.nospam@mps.mpg.de)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;
 PRO find_limb2, img1, x0, y0, r0, r_err, oblateness, ob_angle, bias, 	$
-			brightness,sig_bright,sxt=sxt,qtest=qtest
+                brightness, sig_bright, sxt=sxt, qtest=qtest, $
+                looplimit=looplimit
 ;+
 ; PROJECT:
 ;       SOHO - CDS
@@ -49,6 +50,7 @@ PRO find_limb2, img1, x0, y0, r0, r_err, oblateness, ob_angle, bias, 	$
 ; KEYWORD PARAMETERS:
 ;	SXT -- If set, results will be in units of SXT 1x1 pixels, otherwise
 ;	       results are in units of pixels of the input image 
+;       looplimit -- vary the loop cutoff condition.
 ;
 ; CALLS:
 ;       FIT_CIRCLE, GAUSS_FUNCT2
@@ -86,9 +88,12 @@ PRO find_limb2, img1, x0, y0, r0, r_err, oblateness, ob_angle, bias, 	$
 ;        Liyun Wang, GSFC/ARC, October 7, 1994
 ;           Incorporated into the CDS library
 ;           Made it to return a flag (!err=-1) if it fails to yield good result
+;       Dietmar Germerott, MPS, July 21, 2021
+;           Added keyword looplimt for the ability of increasing the
+;           cutoff limmit in the sobel loop.
 ;
 ; VERSION:
-;       Version 1, October 7, 1994
+;       Version 2, July 21, 2021
 ;-
    !err = 0
    IF N_PARAMS() EQ 0 THEN BEGIN ; Print information
@@ -111,6 +116,11 @@ PRO find_limb2, img1, x0, y0, r0, r_err, oblateness, ob_angle, bias, 	$
                                 ;   calculation
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+   jlimit = 10
+   IF KEYWORD_SET(looplimit) THEN BEGIN
+     jlimit = long(looplimit) > 10
+   ENDIF
+   
 ;  Check the dimensions
    dim = SIZE(img1) 
    IF dim(0) LT 2 THEN BEGIN
@@ -161,7 +171,7 @@ PRO find_limb2, img1, x0, y0, r0, r_err, oblateness, ob_angle, bias, 	$
       ENDIF
       j=j+1
       prev_num_pix = num_pix
-      IF j GT 10 THEN BEGIN     ; Prevent an inifinite search situation
+      IF j GT jlimit THEN BEGIN     ; Prevent an inifinite search situation
          PRINT,'Warning:  find_limb did not find a good cutoff in Sobel space'
          PRINT,'          The resulting fit may be bad'
          not_finished = 0

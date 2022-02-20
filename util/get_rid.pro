@@ -19,6 +19,7 @@
 ;               /ULONG = convert to Unsigned long
 ;             
 ; History     : 29-Nov-1999, Zarro (SM&A/GSFC), written
+;               3-Mar-2019, Zarro (ADNET) - increased value of random id
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-    
@@ -31,7 +32,7 @@ if keyword_set(time) then begin
  temp=strtrim(string(systime(/sec),format='(i10)'),2)
 endif
 
-tseed=strtrim(nint(randomu(seed)*10000.),2)
+tseed=strtrim(nint(randomu(seed)*100000.),2)
 rid=temp+tseed
 
 if keyword_set(ulong) then return,ulong(rid) else return,rid

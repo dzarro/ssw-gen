@@ -28,6 +28,7 @@
 ; Modifications:
 ; 12-Jan-2006, Kim.  Use dim1_colors from xyplot object for colors of bad points
 ; 6-Aug-2008, Kim.  Don't plot bad points with index=-1. (was plotting X at -1, beginning of plot)
+; 03-Jun-2020, Kim. Don't show class on linear plot
 ;-
 
 
@@ -50,7 +51,7 @@ if keyword_set(markbad) then begin
 
 endif
 
-if (keyword_set(showclass)) then begin
+if (keyword_set(showclass)) and !y.type eq 1 then begin  ; only show class on log plot
    ylims = crange('y')
    ytickv = 10.^[-13+indgen(12)]
    ytickname = [' ',' ',' ',' ',' ','A','B','C','M','X',' ',' ']

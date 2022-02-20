@@ -145,8 +145,10 @@
 ;               Added keyword BOTTOM
 ;       Version 9, William Thompson, GSFC, 21-Sep-2006
 ;               Added keyword BSCALED
+;       Version 10, William Thompson, GSFC, 09-Apr-2019
+;               Corrected bug with full color images.
 ; Version     : 
-;	Version 9, 21-Sep-2006
+;	Version 10, 09-Apr-2019
 ;-
 ;
         ON_ERROR,2
@@ -154,7 +156,7 @@
 ;
 ;  Check the number of parameters.
 ;
-	IF (N_PARAMS(0) NE 5) THEN BEGIN
+	IF (N_PARAMS() NE 5) THEN BEGIN
 		PRINT,'*** EXPAND_TV must be called with five parameters:'
 		PRINT,'             ARRAY, MX, MY, IX, IY'
 		RETURN
@@ -170,34 +172,34 @@
 ;  Check the dimensions of ARRAY.
 ;
 	S = SIZE(ARRAY)
-	ARRAY_TYPE = S(S(0) + 1)
-	IF S(0) EQ 3 THEN BEGIN
+	ARRAY_TYPE = S(S[0] + 1)
+	IF S[0] EQ 3 THEN BEGIN
 	    IF N_ELEMENTS(K_TRUE) EQ 1 THEN TRUE=K_TRUE ELSE TRUE=3
 	    CASE TRUE OF
 		1:  BEGIN
-		    SX = S(2)
-		    SY = S(3)
-		    SZ = S(1)
+		    SX = S[2]
+		    SY = S[3]
+		    SZ = S[1]
 		    END
 		2:  BEGIN
-		    SX = S(1)
-		    SY = S(3)
-		    SZ = S(2)
+		    SX = S[1]
+		    SY = S[3]
+		    SZ = S[2]
 		    END
 		ELSE: BEGIN
 		    TRUE = 3
-		    SX = S(1)
-		    SY = S(2)
-		    SZ = S(3)
+		    SX = S[1]
+		    SY = S[2]
+		    SZ = S[3]
 		    END
 	    ENDCASE
 	ENDIF ELSE BEGIN
-	    SX = S(1)
-	    SY = S(2)
+	    SX = S[1]
+	    SY = S[2]
 	    SZ = 1
 	    TRUE=0
 	ENDELSE
-	IF (S(0) NE 2) AND (SZ NE 3) THEN MESSAGE,		$
+	IF (S[0] NE 2) AND (SZ NE 3) THEN MESSAGE,		$
 		'ARRAY must be two-dimensional or an array of three 2D images'
 ;
 ;  Select the image display device or window.
@@ -256,18 +258,18 @@
 		    CASE TRUE OF
 			1:  BEGIN
 			    B= FLTARR(SZ,MMX,MMY)
-			    FOR I=0,SZ-1 DO B(I,*,*) =	$
-				    CONGRDI(REFORM(ARRAY(I,*,*)),MMX,MMY)
+			    FOR I=0,SZ-1 DO B[I,*,*] =	$
+				    CONGRDI(REFORM(ARRAY[I,*,*]),MMX,MMY)
 			    END
 			2:  BEGIN
 			    B= FLTARR(MMX,SZ,MMY)
-			    FOR I=0,SZ-1 DO B(*,I,*) =	$
-				    CONGRDI(REFORM(ARRAY(*,I,*)),MMX,MMY)
+			    FOR I=0,SZ-1 DO B[*,I,*] =	$
+				    CONGRDI(REFORM(ARRAY[*,I,*]),MMX,MMY)
 			    END
 			ELSE:  BEGIN
 			    B= FLTARR(MMX,MMY,SZ)
-			    FOR I=0,SZ-1 DO B(*,*,I) =	$
-				    CONGRDI(ARRAY(*,*,I),MMX,MMY)
+			    FOR I=0,SZ-1 DO B[*,*,I] =	$
+				    CONGRDI(ARRAY[*,*,I],MMX,MMY)
 			    END
 		    ENDCASE
 		ENDELSE
@@ -290,10 +292,29 @@
 			END
 		ENDCASE
 		IF (FIX(MMX/SX)*SX EQ MMX) AND (FIX(MMY/SY)*SY EQ MMY)	$
-			THEN B = REBIN(ARRAY,M1,M2,M3,/SAMPLE)	$
-			ELSE B = CONGRID(ARRAY,M1,M2,M3)
-		ENDELSE
-	END ELSE B = ARRAY
+			THEN B = REBIN(ARRAY,M1,M2,M3,/SAMPLE) ELSE BEGIN
+                    IF SZ EQ 1 THEN B = CONGRID(ARRAY,MMX,MMY) ELSE BEGIN
+                        CASE TRUE OF
+                            1:  BEGIN
+                                B= FLTARR(SZ,MMX,MMY)
+                                FOR I=0,SZ-1 DO B[I,*,*] =	$
+                                  CONGRID(REFORM(ARRAY[I,*,*]),MMX,MMY)
+                            END
+                            2:  BEGIN
+                                B= FLTARR(MMX,SZ,MMY)
+                                FOR I=0,SZ-1 DO B[*,I,*] =	$
+                                  CONGRID(REFORM(ARRAY[*,I,*]),MMX,MMY)
+                            END
+                            ELSE:  BEGIN
+                                B= FLTARR(MMX,MMY,SZ)
+                                FOR I=0,SZ-1 DO B[*,*,I] =	$
+                                  CONGRID(ARRAY[*,*,I],MMX,MMY)
+                            END
+                        ENDCASE
+                    ENDELSE
+                ENDELSE
+            ENDELSE
+        END ELSE B = ARRAY        
 	DPRINT, 'Array was expanded to ' + TRIM(MX) + ' x ' + TRIM(MY) + '.'
 ;
 ;  Scale the image.

@@ -9,10 +9,10 @@
 ;
 ; Explanation : Object to read GOES XRS and EUV data, and return or plot the data.
 ;               For GOES XRS data, we can plot two flux channels, temperature, emission measure,
-;               or energy loss. There are options to subtract background, or to clean the data 
+;               or energy loss. There are options to subtract background, or to clean the data
 ;               of spikes.  Reads either the SDAC or the YOHKOH archive of GOES XRS data.
 ;               For GOES EUV, we can plot the flux from the EUVA, EUVB, or EUVE channel.
-;               
+;
 ;               The GOES object can be used from the command line (o=ogoes() and
 ;               set, get, getdata, plot, plotman methods), or from a gui (goes or o->gui).
 ;               Full documentation at http://hesperia.gsfc.nasa.gov/rhessidatacenter/complementary_data/goes.html
@@ -160,6 +160,44 @@
 ;    30-Dec-2017, Zarro. Consolidated all progress and error messages into rd_goes and rd_goes_sdac.
 ;    4-Jan-2018. Zarro. Replaced RD_GOES with RD_GOES_YOHKOH wrapper for better message control.
 ;    19-Jan-2018, Kim. Added satellite used to structure returned by getdata
+;    17-Sep-2019, Kim. Changed ytitle of derivative plots from 'xxx derivative' to 'xxx s-1'
+;    27-May-2020, Kim. Many changes to add NOAA archive of GOES13-17 data.
+;      NOAA archive is NETCDF files of G16,17, and reprocessed G13-15 (as of now)
+;      Renamed sdac prop to arch, and now 0/1/2/3 = any/noaa/sdac/yohkoh. If any selected, searches in order of noaa-sdac-yohkoh
+;      No longer have 'sdac then yohkoh' or 'yohkoh then sdac' options.
+;      Renamed sdac_used prop to arch_used, and now 1,2,3 = noaa/sdac/yohkoh
+;      Made GOES16 and arch=0 (Any archive) the default
+;      For now, disable temperature and emission measure calcl for G16,17, not ready.  And pass
+;        new remove_scaling keyword to tem routines to undo scaling for old G13-15 data.
+;      In set, renamed sat keyword to satellite so sat or satellite could be used.
+;      Added quiet keyword to read, for quiet getdata calls from command line (disables widget too)
+;      Added calls to read_goes_nc to find/copy/read NOAA GOES netcdf files
+;      Added extra to call to clean_goes to pass through params to new goes16plus clean routine.
+;      Changed default time on entry to 3 days ago (NOAA data isn't being updated as quickly)
+;      Added info to sat_times list
+;      Added property ar_names with the names of the possible archives.
+;     17-jul-2020, RAS, remove temperature em restriction on GOES 16,17
+;     09-sep-2020, RAS, added  hopefully temporary plot text about scaling GOES16/17 A channel to get correct
+;      temperature based on GOES15 comparisons
+;     10-sep-2020, added labeling about scaling for emission measure plot
+;     30-Sep-2020, Kim. In sat_times, instead of having text info inline, call goes_sat_dates to read
+;        a text file with date and comment info for each sat.
+;      Also, use goes_sat_dates with /range in each archive's read routine, and skip searching sat if range doesn't
+;        overlap with requested time range.
+;      Data stored in gdata in read method is now always 'true flux'. By 'true flux' we mean this:
+;        G1-7 from operational data files (only in SDAC and YOHKOH archive) is untouched. (set gdata_unscale_applied = 0)
+;        G8-15 from operational files (only in SDAC or Yohkoh archive which had scaling factors applied
+;          by NOAA) is unscaled. (set gdata_unscale_applied = 1)
+;        G13-17 from NOAA L2 netcdf files (only in NOAA archive) is untouched. (set gdata_unscale_applied = 0)
+;      Added info property gdata_unscale_applied - if set we did the unscaling to get back to 'true flux' before
+;        saving in gdata.
+;      Added common goes_unscale_common to store the unscaling factors used to get to 'true flux'
+;      Added control property orig_scaling - if set, user is requesting the original data from the file.
+;      Added true_flux output keyword to get (when called with /data or /lo or /hi): =1 if data returned is 'true flux'
+;      Value of true_flux is now stored in structure returned by getdata, and is used to control whether remove_scaling is
+;        set in call to goes_tem_calc.
+;      Added 'Original Scaling' label to plots and 'orig_sc' string to plotman panel names if orig_scaling was on.
+;
 ;
 ;-
 ;---------------------------------------------------------------------------
@@ -167,13 +205,15 @@
 function goes::init,_ref_extra=extra
 
   if ~self->utplot::init(_extra=extra) then return,0
-  
+
   recompile,'sock_goes' ; contains socket-capable version of rd_week_file
   self.gdata=ptr_new(/all)
   self.numstat = -1
   self.tstat=ptr_new(/all)
   self.stat=ptr_new(/all)
-  self.sdac = 3
+  self.sat = 1
+  self.arch = 0
+  self.ar_names = ['Any', 'NOAA', 'SDAC', 'YOHKOH']
   self.clean = 1b
   self.markbad = 1b
   self.showclass = 1b
@@ -190,14 +230,14 @@ function goes::init,_ref_extra=extra
   self.abund = 0
   self.use_norm = 0b
   self.norm_factors = ptr_new(intarr(n_elements(goes_sat())) + 1.)
-  
+
   ;-- default to start of current day
-  
+
   self->def_times,tstart,tend
   self->set,tstart=tstart,tend=tend,_extra=extra
-  
+
   return,1
-  
+
 end
 
 ;------------------------------------------------------------------------------
@@ -206,20 +246,20 @@ end
 pro goes::flush,days
 
   if ~is_number(days) then return
-  
+
   old_files=file_since(older=days,patt='g*',count=count,path=goes_temp_dir())
-  
+
   if count gt 0 then file_delete,old_files,/quiet
-  
+
   return & end
-  
+
   ;-----------------------------------------------------------------------------
 pro goes::cleanup, _extra=extra
 
   ;message,'cleaning up...',/info
-  
+
   ;self->free_var, exclude='plotman_obj', _extra=extra
-  
+
   ptr_free,self.gdata, $
     self.tstat, $
     self.stat, $
@@ -229,11 +269,11 @@ pro goes::cleanup, _extra=extra
     self.b0user, $
     self.b1user, $
     self.norm_factors
-    
+
   self->flush,10
   ; self is goes obj, so in utplot cleanup destroys plotman obj, unless we say not to.
   self->utplot::cleanup, _extra=extra, exclude='plotman_obj'
-  
+
   return
 end
 
@@ -244,12 +284,12 @@ function goes::allow_goes,err=err
 
   ; if can get to GOES directory, then that's all we need
   if self->have_goes_dir() then return,1b
-  
+
   ; otherwise, we'll need socket capability to copy data over network
   if ~allow_sockets(err=err) then return,0b
-  
+
   return,1b
-  
+
 end
 
 ;---------------------------------------------------------------------------
@@ -258,69 +298,74 @@ end
 pro goes::def_times,tstart,tend
 
   get_utc,tstart
-  tstart.mjd = tstart.mjd-2
+  tstart.mjd = tstart.mjd-4
   tstart.time=0
   tend=tstart
   tend.mjd=tend.mjd+1
-  
+
   tstart=anytim2tai(tstart)
   tend=anytim2tai(tend)
-  
+
   return & end
-  
+
   ;---------------------------------------------------------------------------
   ;-- check whether local sdac or yohkoh data directories exist
+  ;   for NOAA or EUV data, need to go over network.
+  ;
   ; added sdac keyword so when trying each archive, can call it with sdac=sdac_used 30-jul-08
-  
-function goes::have_goes_dir,sdac=sdac
 
-  sdac = exist(sdac) ? sdac : self->get(/sdac)
-  
-  case sdac of
-    0: return, is_dir('$DIR_GEN_G81')
-      1: return, is_dir('$GOES_FITS')
-      else: return, (is_dir('$DIR_GEN_G81') || is_dir('$GOES_FITS'))
-    endcase
+function goes::have_goes_dir
+
+  if self->get(/euv) gt 0 then return, 0  ; EUVA, B, or E
+
+  case self->get(/arch) of
+    0: return, 0
+    1: return, 0                       ; noaa
+    2: return, is_dir('$GOES_FITS')    ; sdac
+    3: return, is_dir('$DIR_GEN_G81')  ; yohkoh
+  endcase
 
 end
 
-  ;---------------------------------------------------------------------------
-  ; getdata function returns requested data or structure with everything
-  ; timerange - time interval (subset of full interval) to return data for
-  ; temperature - if set, return temperature
-  ; emission - if set, return emission measure
-  ; struct - if set, then return structure with flux, temp, em, and everything
-  ; quick_struct - if set, then return structure with just the items that are set
-  ;    by parameters
-  
+;---------------------------------------------------------------------------
+; getdata function returns requested data or structure with everything
+; timerange - time interval (subset of full interval) to return data for
+; temperature - if set, return temperature
+; emission - if set, return emission measure
+; struct - if set, then return structure with flux, temp, em, and everything
+; quick_struct - if set, then return structure with just the items that are set
+;    by parameters
+
 function goes::getdata, timerange=timerange, $
   times=times, $
   temperature=temperature, emission=emission, $
   lrad=lrad, lx=lx, integrate=integrate, bk_overlay=bk_overlay, $
   low=low, high=high, $
   struct=struct, quick_struct=quick_struct, err=err, _extra=extra
-  
+
+  common goes_unscale_common, unscale_8to15_factors
+
   if keyword_set(extra) then self -> set, _extra=extra
-  
+
   self -> read, _extra=extra, err=err
   if err ne '' then return, -1
-  
+
   ret_struct = keyword_set(struct) or keyword_set(quick_struct)
-  
+
   do_tem = keyword_set(temperature) or keyword_set(emission) or keyword_set(struct) or $
     keyword_set(lrad)
-    
+
   ; ydata and tarray will be the full data and time array from the last read operation
-  
-  ydata = self->get(/data)
+
+  ydata = self->get(/data, true_flux=true_flux)
   tarray = self->get(/times)
   utbase_ascii = self->get(/utbase)
   utbase = anytim(utbase_ascii)
-  
+
   ; tarray may contain a bigger interval than the currently set tstart/tend, so
   ; need to get the subset of data. If timerange passed in, use that interval
   ; instead of tstart/tend
-  
+
   checkvar, timerange, [self->get(/tstart), self->get(/tend)]
   if valid_range(timerange,/time) then begin
     trstart = anytim(timerange[0]) - utbase
@@ -338,11 +383,11 @@ function goes::getdata, timerange=timerange, $
       endif
     endif
   endif
-  
+
   if keyword_set(times) and ~ret_struct then return, tarray
-  
+
   sat_num = goes_sat(self.sat,/num)
-  
+
   yclean = -1
   bad0 = -1
   bad1 = -1
@@ -351,24 +396,28 @@ function goes::getdata, timerange=timerange, $
   rad_loss = -1
   rad_loss_x = -1
   integrate_times = [-1.d0,-1.d0]
-  
+
   ; Call clean even if clean flag isn't set when markbad is selected so  we'll
   ; have bad0 and bad1 (stat variable are only defined for sdac data, but clean_goes
   ; will find glitches in both yohkoh and sdac data.) Also call clean if struct
   ; is set, because then we want everything.
-  
+
   do_clean = self.clean or self.markbad or keyword_set(struct)
-  
+
   ; yes_clean will be true if actually did clean.  Even if requested, may get error.
   yes_clean = 0
-  
+
   if do_clean and n_elements(tarray) gt 5 then begin
-    if self.euv_used gt 0 then clean_geuv, tarray = tarray, yarray = ydata, $
-      yclean = yclean, bad0 = bad0, bad1 = bad1, numstat=self.numstat, $
-      tstat=*self.tstat, stat=*self.stat, error=error $
-    else clean_goes, tarray = tarray, yarray = ydata, $
-      yclean = yclean, bad0 = bad0, bad1 = bad1, numstat=self.numstat, $
-      satellite=sat_num, tstat=*self.tstat, stat=*self.stat, error=error
+    if self.euv_used gt 0 then begin
+      clean_geuv, tarray = tarray, yarray = ydata, $
+        yclean = yclean, bad0 = bad0, bad1 = bad1, numstat=self.numstat, $
+        tstat=*self.tstat, stat=*self.stat, error=error
+    endif else begin
+      clean_goes, tarray = tarray, yarray = ydata, $
+        yclean = yclean, bad0 = bad0, bad1 = bad1, numstat=self.numstat, $
+        satellite=sat_num, tstat=*self.tstat, stat=*self.stat, error=error, $
+        _extra = extra  ;RAS added 1-jun-2020, pass _extra thru
+    endelse
     if error then begin
       ;only print this message if user actually asked for clean data.
       if self.clean then message, 'Error in clean_goes. Using non-cleaned data.',/info
@@ -376,18 +425,18 @@ function goes::getdata, timerange=timerange, $
       yes_clean = 1
     endelse
   endif
-  
+
   ;if self.use_norm then begin
   ;  factor = (*self.norm_factors)[self.sat]
   ;  ydata = ydata * factor
   ;  if yclean[0] ne -1 then yclean = yclean * factor
   ;endif
-  
-  
+
+
   yes_clean = yes_clean and self.clean
-  
+
   yuse = yes_clean ? yclean : ydata
-  
+
   ; yes_bsub will be true if actually subtracted bk.  Even if requested, may get error.
   yes_bsub = 0
   ybsub = -1
@@ -403,29 +452,33 @@ function goes::getdata, timerange=timerange, $
       yes_bsub = 1
     endif
   endif
-  
+
   if keyword_set(low) and ~ret_struct then return, yuse[*,0]
   if keyword_set(high) and ~ret_struct then return, yuse[*,1]
-  
+
   ; Now yuse incorporates clean and bsub changes if requested and possible
-  
+
   tem = -1
   em = -1
   rad_loss = -1
   rad_loss_x = -1
   integrate_times = -1
   if self.euv_used gt 0 then goto, done
-  
+
   if do_tem then begin
     ; pass in unbackground-subtracted data (cleaned if cleaning was successful)
+    ; remove_scaling is set only for sdac or yohkoh data, for noaa remove_scaling is 0
+
+    chianti_table_version =goes_get_chianti_version( new_table = new_table )
     goes_tem, tarray=tarray, yclean=(yes_clean? yclean : ydata), tempr=tem, emis=em, $
-      savesat=sat_num, date=utbase_ascii, bkarray=bk, abund=self.abund
-      
+      savesat=sat_num, date=utbase_ascii, bkarray=bk, abund=self.abund, $
+      remove_scaling=~true_flux, new_table = new_table
+
     if keyword_set(temperature) then yuse = tem
     if keyword_set(emission)  then yuse = em
-    
+
   endif
-  
+
   if keyword_set(integrate) then begin
     ind = [0,n_elements(tarray)-1]
     if self.itimes[0] ne -1.d0 then begin
@@ -437,7 +490,7 @@ function goes::getdata, timerange=timerange, $
     endif
     integrate_times = anytim(tarray[ind]+utbase,/vms)
   endif
-  
+
   if keyword_set(lrad) or keyword_set(struct) then begin
     rad_loss = calc_rad_loss(em, tem*1.e6)
     if keyword_set(integrate) then begin
@@ -446,7 +499,7 @@ function goes::getdata, timerange=timerange, $
       rad_loss = total(rad_loss,/cumulative) * self->get_res()
     endif
   endif
-  
+
   if keyword_set(lx) or keyword_set(lrad) or keyword_set(struct) then begin
     rad_loss_x = goes_lx(yes_bsub ? ybsub : yclean, time=tarray[0]+utbase)
     if keyword_set(integrate) then begin
@@ -455,11 +508,11 @@ function goes::getdata, timerange=timerange, $
       rad_loss_x = total(rad_loss_x, 1, /cumulative) * self->get_res()
     endif
   endif
-  
+
   done:
-  
+
   sat = self->get(/sat)
-  
+
   if keyword_set(struct) or keyword_set(quick_struct) then begin
     return, { $	;return everything for flux data
       sat: sat, $
@@ -477,7 +530,8 @@ function goes::getdata, timerange=timerange, $
       lx: rad_loss_x, $
       integrate_times: integrate_times, $
       yes_clean: yes_clean, $
-      yes_bsub: yes_bsub }
+      yes_bsub: yes_bsub, $
+      true_flux: true_flux }
   endif else begin
     if keyword_set(temperature) then return, tem
     if keyword_set(emission)  then return, em
@@ -485,7 +539,7 @@ function goes::getdata, timerange=timerange, $
     if keyword_set(lx) then return, rad_loss_x
     return, yuse
   endelse
-  
+
 end
 
 ;---------------------------------------------------------------------------
@@ -502,24 +556,24 @@ end
 function goes::calc_bk, times, yuse
 
   ybk = -1
-  
+
   if self->valid_bktimes() or (*self.b0user)[0] ne -1 or (*self.b1user)[0] ne -1 then begin
-  
+
     ny = n_elements(yuse[*,0])
     ybk = make_array(size=size(yuse))
-    
+
     if self->valid_bktimes() then begin
       ; default to 1st order polynomial.  Otherwise get order from first character of string.
       ; but if doing exponential, order will be 1.
       order=1
       do_poly = ~stregex(self.bfunc, 'exp', /boolean, /fold_case)
       if do_poly and stregex(self.bfunc, '^[0-3]', /boolean) then order = fix(strmid(self.bfunc,0,1))
-      
+
       bktimes=anytim(self->get(/bktimes))
       sizbk = size(bktimes,/str)
       sep_ch = sizbk.n_dimensions eq 3
       nbk = sizbk.dimensions[1] > 1
-      
+
       for ich = 0,1 do begin
         if ich eq 0 or sep_ch then begin
           ind = -1
@@ -529,7 +583,7 @@ function goes::calc_bk, times, yuse
           endfor
           ind = get_uniq(ind)	;eliminate overlap, and multiple -1's if where returned none
         endif
-        
+
         if n_elements(ind) gt 1 then begin
           ind = ind[1:*]   ; get rid of leading -1
           if do_poly then begin
@@ -544,33 +598,37 @@ function goes::calc_bk, times, yuse
         endif
       endfor
       if total(ybk) eq 0. then message,'No data in background time intervals.', /info
-      
+
     endif
-    
+
     ;If user bk value(s) defined then override ybk with that.  If one element, set all elements
     ; in ybk[*,ich] to that, otherwise use congrid to ensure dimensions match yuse array
     if (*self.b0user)[0] ne -1 then $
       ybk[*,0] = n_elements(*self.b0user) eq 1 ? *self.b0user : congrid(*self.b0user, ny, /interp)
     if (*self.b1user)[0] ne -1 then $
       ybk[*,1] = n_elements(*self.b1user) eq 1 ? *self.b1user : congrid(*self.b1user, ny, /interp)
-      
+
   endif
-  
+
   if ybk[0] eq -1 then message, 'No valid background times or user background levels are defined.', /info
-  
+
   return, ybk
-  
+
 end
 
 ;---------------------------------------------------------------------------
 
+; true_flux - output keyword
+;
 function goes::get,_extra=extra,data=data,low=low,high=high,$
   times=times,utbase=utbase,no_copy=no_copy,tai=tai,secs79=secs79, $
   tstart=tstart, tend=tend, $
   btimes=btimes, b0times=b0times, b1times=b1times, bktimes=bktimes, $
   b0user=b0user, b1user=b1user, use_norm=use_norm, norm_factors=norm_factors, $
-  itimes=itimes, sat=sat
-  
+  itimes=itimes, sat=sat, true_flux=true_flux, orig_scaling=orig_scaling
+
+  common goes_unscale_common, unscale_8to15_factors
+
   if keyword_set(sat) then return, goes_sat(self->getprop(/sat))  ;returns GOESxx format
   if keyword_set(tstart) then return, anytim2utc(self.tstart,/vms)
   if keyword_set(tend) then return, anytim2utc(self.tend,/vms)
@@ -591,33 +649,35 @@ function goes::get,_extra=extra,data=data,low=low,high=high,$
       return,  bktimes
     endif else return, -1
   endif
-  
+
+  if keyword_set(orig_scaling) then return, self.orig_scaling
+
   if keyword_set(b0user) then return, *self.b0user
   if keyword_set(b1user) then return, *self.b1user
-  
+
   if keyword_set(itimes) then return, self.itimes[0] eq -1 ? -1. : anytim2utc(self.itimes,/vms)
-  
+
   ktime=keyword_set(times) or arg_present(times)
   kbase=keyword_set(utbase) or arg_present(utbase)
   klow=keyword_set(low) or arg_present(low)
   khigh=keyword_set(high) or arg_present(high)
   kdata=keyword_set(data) or arg_present(data)
-  
+
   ktime2=keyword_set(times) and ~arg_present(times)
   kbase2=keyword_set(utbase) and ~arg_present(utbase)
   klow2=keyword_set(low) and ~arg_present(low)
   khigh2=keyword_set(high) and ~arg_present(high)
   kdata2=keyword_set(data) and ~arg_present(data)
-  
+
   utbase=self->getprop(/utbase)
-  
+
   if ktime or kdata or khigh or klow  then begin
-  
+
     if ~self->have_gdata() then begin
       message,'No GOES data yet read in',/info
       return,''
     endif
-    
+
     if ktime then begin
       ;  times=double( (*self.gdata).time / 1000.d0)  ;changed to double, 23-nov-2010
       times = (*self.gdata).time  ; DOUBLE, time in sec since base time
@@ -625,26 +685,35 @@ function goes::get,_extra=extra,data=data,low=low,high=high,$
       if keyword_set(tai) then times=temporary(times)+anytim(utbase,/tai)
       if keyword_set(secs79) then times=temporary(times)+anytim(utbase)
     endif
-    
+
     if kdata or khigh or klow then begin
       if keyword_set(no_copy) then data=temporary(*self.gdata) else data=*self.gdata
+      if self->getprop(/orig_scaling) && self->getprop(/gdata_unscale_applied) then begin
+        ; if user requested original scaling and the data was unscaled, then rescale it here
+        ; avoid the flagged bad values of -99999.0
+        qlo = where(data.lo ne -99999.0, nlo)
+        qhi = where(data.hi ne -99999.0, nhi)
+        if nlo gt 0 then data[qlo].lo = data[qlo].lo * unscale_8to15_factors[0]
+        if nhi gt 0 then data[qhi].hi = data[qhi].hi * unscale_8to15_factors[1]
+        true_flux = 0
+      endif else true_flux = 1
       if klow or kdata then low=data.lo
       if khigh or kdata then high=data.hi
       if kdata then data=[[data.lo],[data.hi]]
     endif
-    
+
   endif
-  
+
   if ktime2 then return,times
   if kbase2 then return,utbase
   if klow2 then return,low
   if khigh2 then return,high
   if kdata2 then return,data
-  
+
   if is_struct(extra) then return,self->utplot::get(_extra=extra)
-  
+
   return,''
-  
+
 end
 
 ;---------------------------------------------------------------------------
@@ -652,44 +721,45 @@ end
 function goes_valid_time_interval, times, type, value
 
   err_msg = ''
-  
+
   case type of
-  
+
     'Background' : begin
       if n_elements(times) ge 2 then value = anytim2tai(times) else begin
         if times[0] eq -1 or times[0] eq 0 then value = -1
       endelse
       if ~exist(value) then err_msg = 'Background time intervals should be an array of start/ends, or -1 for none.'
     end
-    
+
     'Integration' : begin
       if n_elements(times) eq 2 then value = anytim2tai(times) else begin
         if times[0] eq -1 or times[0] eq 0 then value = -1
       endelse
       if ~exist(value) then err_msg = 'Integration time interval should be a single start,end, or -1 to disable.'
     end
-    
+
   endcase
-  
+
   if err_msg eq '' then return,1 else begin
     message, /info, err_msg
     return, 0
   endelse
-  
+
 end
 
 ;---------------------------------------------------------------------------
 ;-- GOES set method
 
 pro goes::set,tstart=tstart,tend=tend, $
-  mode=mode,sat=sat,_extra=extra,$
-  sdac=sdac, yohkoh=yohkoh, euv=euv, $
+  mode=mode,satellite=sat,_extra=extra,$
+  arch=arch, any=any, noaa=noaa, sdac=sdac, yohkoh=yohkoh, euv=euv, $
   clean=clean,markbad=markbad,showclass=showclass, $
   bsub=bsub,btimes=btimes,b0times=b0times,b1times=b1times,bfunc=bfunc,$
   b0user=b0user, b1user=b1user, use_norm=use_norm, norm_factors=norm_factors, $
   remote=remote,verbose=verbose,$
-  itimes=itimes,abund=abund, plotman_obj=plotman_obj
-  
+  itimes=itimes,abund=abund, plotman_obj=plotman_obj, $
+  orig_scaling=orig_scaling
+
   ;-- user can select GOES satellite by number (sat = 12), name (sat = 'GOES12'), or keyword (/goes12).
   ; Store in self.sat as index 0, 1 etc. (index into array in goes_sat.pro which is in reverse order). 0 is most recent sat.
   if exist(sat) then begin
@@ -700,77 +770,88 @@ pro goes::set,tstart=tstart,tend=tend, $
     index = self->sat2index(extra)
     if index gt -1 then self.sat = index else message,'No such satellite - '+(tag_names(extra))[ind],/info
   end
-  
+
   if is_number(remote) then self.remote=remote
   if is_number(verbose) then self.verbose=verbose
-  
-  if is_number(sdac) then begin
-    self.sdac = sdac
-    self.euv = 0
-  endif
-  
-  if is_number(yohkoh) then begin
-    self.sdac = (yohkoh eq 0)
-    self.euv = 0
-  endif
- 
-;-- need this to search both archives from command line
 
-  if is_number(sdac) && is_number(yohkoh) then begin
-   if (yohkoh gt 0) && (sdac gt 0) then self.sdac=3
+  if is_number(arch) then begin
+    self.arch = arch
+    self.euv = 0
   endif
- 
+
+  if keyword_set(any) then begin
+    self.arch = 0
+    self.euv = 0
+  endif
+
+  if is_number(noaa) then begin
+    self.arch = (noaa eq 0) ? 0 : 1
+    self.euv = 0
+  endif
+
+  if is_number(sdac) then begin
+    self.arch = (sdac eq 0) ? 0 : 2
+    self.euv = 0
+  endif
+
+  if is_number(yohkoh) then begin
+    self.arch = (yohkoh eq 0) ? 1 : 3
+    self.euv = 0
+  endif
+
   if is_number(euv) then self.euv = 0>euv<3
-  
+
   ;-- user can select time resolution mode either by number (e.g. mode=1) or keyword (e.g. /three)
   if is_number(mode) then self.mode = 0>mode<2 else self.mode = self->get_mode(extra)
-  
+
   if is_struct(extra) then self->utplot::set,_extra=extra
-  
+
   if exist(tstart) then begin
     if valid_time(tstart) then self.tstart=anytim2tai(tstart) else message, /info,'Invalid time: ' + tstart
   endif
   if exist(tend) then begin
     if valid_time(tend) then self.tend=anytim2tai(tend) else message, /info,'Invalid time: ' + tend
   endif
-  
+
   if is_number(clean) then self.clean = 0b > clean < 1b
-  
+
   if is_number(markbad) then self.markbad = 0b > markbad < 1b
-  
+
   if is_number(showclass) then self.showclass = 0b > showclass < 1b
-  
+
   if is_number(bsub) then self.bsub = 0b > bsub < 1b
-  
+
   if is_string(bfunc) then begin
     q = where (strpos(strlowcase(self.bfunc_options), strlowcase(bfunc)) ne -1, count)
     if count gt 0 then self.bfunc=self.bfunc_options[q[0]] else $
       message,/info,'Invalid function.'
   endif
-  
+
   if exist(b0user) then *self.b0user = b0user
   if exist(b1user) then *self.b1user = b1user
-  
+
   if is_number(use_norm) then self.use_norm = 0b < use_norm < 1b
   if exist(norm_factors) then *self.norm_factors = norm_factors
-  
+
   ;-- user can select abundance model either by number (e.g. abund=1) or string (abund='Photospheric')
   if is_number(abund) then self.abund = 0b > abund < 2b
   if is_string(abund) then begin
     q = where (strpos(strlowcase(self.abund_options),  strlowcase(abund)) ne -1, count)
     if count gt 0 then self.abund = q[0] else message, /info, 'Invalid abundance model: ' + abund
   endif
-  
+
   if exist(btimes) then if goes_valid_time_interval(btimes, 'Background', value) then *self.btimes = value
   if exist(b0times) then if goes_valid_time_interval(b0times, 'Background', value) then *self.b0times = value
   if exist(b1times) then if goes_valid_time_interval(b1times, 'Background', value) then *self.b1times = value
   if exist(itimes) then if goes_valid_time_interval(itimes, 'Integration', value) then self.itimes = value
-  
+
   if is_class(plotman_obj, 'plotman', /quiet) then begin
     if self.plotman_obj ne plotman_obj then obj_destroy, self.plotman_obj
     self.plotman_obj=plotman_obj
   endif
-  
+
+  if is_number(orig_scaling) then self.orig_scaling = 0 > orig_scaling < 1
+
   return
 end
 
@@ -785,19 +866,19 @@ pro goes::fix_keywords,extra
     if count gt 0 then extra=rem_tag(extra,chk)
     if ~is_struct(extra) then delvarx,extra
   endif
-  
+
   sat=self->getprop(/sat)
   mode=self->getprop(/mode)
   goes_res=['three_sec','one_min','five_min']
   extra=add_tag(extra,1,goes_sat(sat))
   extra=add_tag(extra,1,goes_res[mode])
   extra=rem_tag(extra,'sat')
-  
+
   return & end
-  
+
   ;---------------------------------------------------------------------------
   ;-- GOES plot method
-  
+
 pro goes::prepare_plot,tstart,tend, timerange=timerange, $
   derflux=derflux, $
   temperature=temperature, emission=emission, $
@@ -805,7 +886,7 @@ pro goes::prepare_plot,tstart,tend, timerange=timerange, $
   low=low, high=high, $
   err=err,_extra=extra,$
   file_id=file_id, new_utplot_obj=new_utplot_obj
-  
+
   if self.euv gt 0 then begin
     if keyword_set(temperature) or keyword_set(emission) or keyword_set(lrad) then begin
       err = 'Invalid plot choice for EUV data.  Choose Flux or Flux Derivative.'
@@ -817,27 +898,32 @@ pro goes::prepare_plot,tstart,tend, timerange=timerange, $
       file_id=file_id, new_utplot_obj=new_utplot_obj
     return
   endif
-  
+
   err=''
   if ~self->allow_goes(err=err) then return
-  
+
   struct = self -> getdata(tstart=tstart, tend=tend, timerange=timerange, $
     temperature=temperature, emission=emission, lrad=lrad, integrate=integrate, $
     bk_overlay=bk_overlay, $
     low=low, high=high, $
     _extra=extra, err=err, /quick_struct)
   if err ne '' then return
-  
+
   title=self->title()
   showclass = self -> getprop(/showclass)
   markbad = self -> getprop(/markbad)
   file_id = exist(file_id) ? self->mk_file_id() + ' ' + file_id : self->mk_file_id()
-  
+
   do_bk_plot = 0
-  
+
   case 1 of
     keyword_set(temperature): begin
       ydata = struct.tem
+      if n_elements(ydata) le 1 then begin
+        err = 'No temperature data available.'
+        self->display_message, err
+        return
+      endif
       data_unit = 'Temperature (MK)'
       label = 'Model: ' + self->get_abund_name()
       ylog = 0
@@ -851,6 +937,11 @@ pro goes::prepare_plot,tstart,tend, timerange=timerange, $
     end
     keyword_set(emission): begin
       ydata = struct.em
+      if n_elements(ydata) le 1 then begin
+        err = 'No emission measure data available.'
+        self->display_message, err
+        return
+      endif
       data_unit = 'Emission Measure (10!u49!ncm!u-3!n)'
       label = 'Model: ' + self->get_abund_name()
       ylog = 1
@@ -864,6 +955,11 @@ pro goes::prepare_plot,tstart,tend, timerange=timerange, $
     end
     keyword_set(lrad): begin
       integ = keyword_set(integrate)
+      if n_elements(struct.lx) le 1 then begin
+        err = 'No energy loss rate (lrad) data available.'
+        self->display_message, err
+        return
+      endif
       ydata = [[struct.lx[*,0]], [struct.lx[*,1]], [struct.lrad]]
       data_unit = integ ? 'erg' : 'erg s!u-1!n'
       label = 'Model: ' + self->get_abund_name()
@@ -897,7 +993,7 @@ pro goes::prepare_plot,tstart,tend, timerange=timerange, $
       dim1_ids=['1.0 - 8.0 A','0.5 - 4.0 A']
       dim1_unit='Wavelength (Ang)'
       nbad = n_elements(struct.bad0) > n_elements(struct.bad1)
-      
+
       do_bk_plot = keyword_set(bk_overlay) and (struct.bk[0] ne -1)
       if do_bk_plot then begin
         bk_is_single = (n_elements(struct.bk) eq 2) ; single bk value for each channel
@@ -921,7 +1017,7 @@ pro goes::prepare_plot,tstart,tend, timerange=timerange, $
           ydata[*,1] = deriv(struct.tarray, ydata[*,1])
           title='Derivative of Flux  ' + title
           file_id = file_id + ' Deriv Flux'
-          data_unit = data_unit + ' derivative'
+          data_unit = data_unit + ' s!u-1!n'
         endif else begin
           title = 'Flux  ' + title
           file_id = file_id + ' Flux'
@@ -940,27 +1036,37 @@ pro goes::prepare_plot,tstart,tend, timerange=timerange, $
       endelse
     end
   endcase
-  
-  label = append_arr(label, 'GOES archive: ' + (self.sdac_used ? 'SDAC' : 'Yohkoh'))
+
+  label = append_arr(label, 'GOES archive: ' + self.ar_names[self.arch_used])
   if struct.yes_clean then label = append_arr(label, 'Cleaned')
   if struct.yes_bsub and ~do_bk_plot then  label = append_arr(label, 'Background subtracted')
-  
+  ;RAS, added 9-sep-2020, hopefully temporary plot text about scaling GOES16/17 A channel to get correct
+  ;temperature based on GOES15 comparisons
+  if keyword_set( temperature ) or keyword_set(emission) then begin
+    defsysv,'!SCALE16_VALUE', exist = is_scaled
+    sc16_value = is_scaled ? !SCALE16_VALUE : 1.0
+    if sc16_value gt 1.0 then label = append_arr( label, 'A Chan scaled by '+string(sc16_value,form='(f4.2)'))
+  endif
+
+  if self->getprop(/orig_scaling) && self->getprop(/gdata_unscale_applied) then $
+    label = append_arr(label, 'Original Scaling')
+
   self->set,xdata=struct.tarray, ydata=ydata
   self->set, $
     ylog=ylog, dim1_use=dim1_use, dim1_ids=dim1_ids, dim1_unit=dim1_unit,$
     label=label, id=title, $
     data_unit=data_unit, /no_copy, filename=file_id, /dim1_sel
-    
+
   if showclass or markbad then begin
     ;   tarray=self->get(/times)
     addplot_arg = {markbad: markbad, showclass:showclass, $
       tarray:struct.tarray, ydata: ydata, ybad: ybad}
     addplot_name = 'goes_oplot'
   endif else addplot_name = ''
-  
+
   self -> utplot::set, addplot_name=addplot_name, addplot_arg=addplot_arg
-  
-  
+
+
   if arg_present(new_utplot_obj) then begin
     new_utplot_obj = obj_new('utplot', struct.tarray, ydata, utbase=self->get(/utbase), $
       status=status, err_msg=err_msg)
@@ -970,7 +1076,7 @@ pro goes::prepare_plot,tstart,tend, timerange=timerange, $
       data_unit=data_unit, /no_copy, filename=file_id, /dim1_sel
     new_utplot_obj -> set, addplot_name=addplot_name, addplot_arg=addplot_arg
   endif
-  
+
 end
 
 
@@ -982,31 +1088,31 @@ pro goes::prepare_plot_euv, tstart, tend, timerange=timerange, uncorrected=uncor
   derflux=derflux, $
   err=err, _extra=extra,$
   file_id=file_id, new_utplot_obj=new_utplot_obj
-  
+
   checkvar, uncorrected, 0  ; default is corrected, only applies to EUVE
-  
+
   err=''
   if ~self->allow_goes(err=err) then return
-  
+
   struct = self -> getdata(tstart=tstart, tend=tend, timerange=timerange, $
     _extra=extra, err=err, /quick_struct)
   if err ne '' then return
-  
+
   title=self->title()
   if strpos(title, 'EUVE') eq -1 then uncorrected = 0 ; force uncorrected to 0 for anything other than EUVE
-   
+
   markbad = self -> getprop(/markbad)
   file_id = exist(file_id) ? self->mk_file_id() + ' ' + file_id : self->mk_file_id()
-  
+
   if uncorrected then title = str_replace(title, 'EUVE', 'EUVE Uncorrected')
   if uncorrected then file_id = str_replace(file_id, 'EUVE', 'EUVE Uncorrected')
-  
+
   do_deriv = keyword_set(derflux)
   data_unit='watts m!u-2!n'
   label = ''
   ylog = 0
   nbad = n_elements(struct.bad0)
-  
+
   times = struct.tarray
   ydata = uncorrected ? struct.ydata[*,1] : struct.ydata[*,0]  ; uncorrected only for EUVE, otherwise always use [*,0]
   if self.clean then begin
@@ -1019,12 +1125,12 @@ pro goes::prepare_plot_euv, tstart, tend, timerange=timerange, uncorrected=uncor
     times = times[qgood]
     ydata = ydata[qgood]
   endif
-  
+
   if do_deriv then begin
     ydata = deriv(times, ydata)
     title='Derivative of Flux  ' + title
     file_id = file_id + ' Deriv Flux'
-    data_unit = data_unit + ' derivative'
+    data_unit = data_unit + ' s!u-1!n'
   endif else begin
     title = 'Flux  ' + title
     file_id = file_id + ' Flux'
@@ -1039,26 +1145,26 @@ pro goes::prepare_plot_euv, tstart, tend, timerange=timerange, uncorrected=uncor
   ;          dim1_use = 0
   ;          dim1_ids = dim1_ids[chan]
   ;        endif
-  
-  
+
+
   label = ''
   if struct.yes_clean then label = append_arr(label, 'Cleaned')
-  
+
   self->set,xdata=times, ydata=ydata
   self->set, $
     ylog=ylog, $
     label=label, id=title, $
     data_unit=data_unit, /no_copy, filename=file_id
-    
+
   if markbad then begin
     ;   tarray=self->get(/times)
     addplot_arg = {markbad: markbad, showclass:0, $
       tarray:times, ydata: ydata, ybad: ybad}
     addplot_name = 'goes_oplot'
   endif else addplot_name = ''
-  
+
   self -> utplot::set, addplot_name=addplot_name, addplot_arg=addplot_arg
-  
+
   if arg_present(new_utplot_obj) then begin
     new_utplot_obj = obj_new('utplot', times, ydata, utbase=self->get(/utbase), $
       status=status, err_msg=err_msg)
@@ -1068,7 +1174,7 @@ pro goes::prepare_plot_euv, tstart, tend, timerange=timerange, uncorrected=uncor
       data_unit=data_unit, /no_copy, filename=file_id
     new_utplot_obj -> set, addplot_name=addplot_name, addplot_arg=addplot_arg
   endif
-  
+
 end
 
 ;---------------------------------------------------------------------------
@@ -1079,11 +1185,11 @@ pro goes::plot, tstart, tend, timerange=timerange, err_msg=err, ps=ps, _extra=ex
 
   ;if user passed in start time as arg, but no end time, assume they want full day
   if exist(tstart) and ~exist(tend) then tend = anytim2tai(tstart)+86400.
-  
+
   self -> prepare_plot, tstart, tend, $
     timerange=timerange, err=err, _extra=extra
   if err ne '' then return
-  
+
   if keyword_set(ps) then begin
     savedev = !d.name
     savefont = !p.font
@@ -1098,20 +1204,20 @@ pro goes::plot, tstart, tend, timerange=timerange, err_msg=err, ps=ps, _extra=ex
     tvlct,r,g,b
     !p.font = savefont
   endif else begin
-  
+
     self->utplot::plot,_extra=extra,err=err,timerange=timerange
-    
+
   endelse
-  
+
   return & end
-  
+
   ;---------------------------------------------------------------------------
   ;-- check whether have plotman software in path
-  
+
 function goes::have_plotman_dir
 
   return, have_proc('plotman__define')
-  
+
 end
 
 ;---------------------------------------------------------------------------
@@ -1122,34 +1228,34 @@ end
 function goes::get_plotman, valid=valid, nocreate=nocreate, quiet=quiet, _extra=extra
 
   err_msg = ''
-  
+
   valid = 0
-  
+
   if is_class(self.plotman_obj, 'PLOTMAN',/quiet) then valid = 1 else begin
-  
+
     if ~keyword_set(nocreate) then begin
-    
+
       ; first make sure plotman directories are in path
       if self->have_plotman_dir() then begin
-      
+
         plotman_obj = obj_new('plotman', /multi_panel,  $
           error=err, _extra = extra)
         if err then err_msg = 'Error creating plotman object.' else begin
           self.plotman_obj = plotman_obj
           valid = 1
         endelse
-        
+
       endif else begin
         err_msg = 'Please include HESSI in your SSW IDL path if you want to use plotman.'
       endelse
-      
+
       if err_msg ne '' and ~keyword_set(quiet) then self->display_message, err_msg
     endif
-    
+
   endelse
-  
+
   return, self.plotman_obj
-  
+
 end
 
 ;---------------------------------------------------------------------------
@@ -1162,85 +1268,94 @@ pro goes::plotman, tstart, tend, plotman_obj=plotman_obj, desc=desc, _extra=extr
   if keyword_set(plotman_obj) then self->set, plotman_obj=plotman_obj
   plotman_obj = self -> get_plotman (valid=valid)
   if ~valid then return
-  
+
   ;if user passed in start time as arg, but no end time, assume they want full day
   if exist(tstart) and ~exist(tend) then tend = anytim2tai(tstart)+86400.
-  
+
   self -> prepare_plot, tstart, tend, file_id=desc, err=err, new_utplot_obj=new_utplot_obj, _extra=extra
   if err ne '' then return
-  
+
   ;stat = plotman_obj -> setdefaults (input=new_utplot_obj, plot_type='utplot', _extra=extra)
   plotman_obj->new_panel, desc, /replace, input=new_utplot_obj, plot_type='utplot', _extra=extra
-  
+
   obj_destroy, new_utplot_obj
-  
+
 end
 
 ;---------------------------------------------------------------------------
 ;-- GOES read method
 ; Stores data and times in gdata structure property.  If new tstart/tend is
-; within the last full time read, and sat, sdac, and mode (resolution) didn't change,
+; within the last full time read, and sat, arch, and mode (resolution) didn't change,
 ; we return.  get_data method will handle getting the correct subset of times.
 
 pro goes::read,tstart,tend,$
   err=err,file_id=file_id,_extra=extra,$
-  force=force,status=status,widget=widget
+  force=force,status=status,widget=widget, quiet=quiet
+
+  common goes_unscale_common, unscale_8to15_factors
 
   err=''
+
+  ; Unscaling factor we will apply to GOES 8-15 data from either SDAC or YOHKOH archive
+  ; GOES 13-15 at NOAA archive have already been unscaled.
+  unscale_8to15_factors = [0.700, 0.850]
+
   if ~self->allow_goes(err=err) then return
-  verbose=self->getprop(/verbose)
- 
-;-- pass GOES widget base as group leader to XBANNER widget so that it dies
-;   when GOES dies
+
+  quiet = keyword_set(quiet)
+  verbose=quiet ? 0 : self->getprop(/verbose)
+
+  ;-- pass GOES widget base as group leader to XBANNER widget so that it dies
+  ;   when GOES dies
 
   wgoes=xregistered('goes')
-  widget=(wgoes ne 0) || keyword_set(widget)
+  widget = ~quiet && ( (wgoes ne 0) || keyword_set(widget) )
   if (wgoes ne 0) then gbase=widget_id('goes')
-  
+
   ;if user passed in start time as arg, but no end time, assume they want full day
   if exist(tstart) && ~exist(tend) then tend = anytim2tai(tstart)+86400.
-  
+
   ; set any changed parameters into the object
   self->set,tstart=tstart,tend=tend,_extra=extra
-  
+
   ; only read new data if force is set, or need_update returns 1
-  
+
   status=(keyword_set(force) || self->need_update())
   if ~status then begin
-   sdac_used=self->getprop(/sdac_used)
-   euv_used=self->getprop(/euv_used)
-   if sdac_used then amess='SDAC' else amess='Yohkoh'
-   if euv_used then amess='EUV'
-   vmess='Returning last successful GOES/'+amess+' search result for:'
-   tstart=anytim2utc(self->getprop(/tstart),/vms)
-   tend=anytim2utc(self->getprop(/tend),/vms)
-   vrange=trim(tstart)+' - '+trim(tend)
-   mprint,[vmess,vrange]
-   if widget then xbanner,[vmess,vrange],group=gbase
-   return
+    arch_used=self->getprop(/arch_used)
+    euv_used=self->getprop(/euv_used)
+    amess=self->get_arch_name()
+    if euv_used then amess='EUV'
+    vmess='Returning last successful GOES/'+amess+' search result for:'
+    tstart=anytim2utc(self->getprop(/tstart),/vms)
+    tend=anytim2utc(self->getprop(/tend),/vms)
+    vrange=trim(tstart)+' - '+trim(tend)
+    if ~quiet then mprint,[vmess,vrange]
+    if widget then xbanner,[vmess,vrange],group=gbase
+    return
   endif
-  
+
   euv = self->getprop(/euv)
   remote=self->getprop(/remote)
-  sdac=self->getprop(/sdac)
+  arch=self->getprop(/arch)
   sat=self->getprop(/sat)
-  
-  sdac_used=0
+
+  arch_used=-1
   euv_used=0
-  if (sdac eq 1) || (sdac eq 3) then amess='SDAC' else amess='Yohkoh'
+  amess=self->get_arch_name(arch)
   if euv gt 0 then amess='EUV'
-  
+
   dstart=anytim2utc(self->getprop(/tstart),/vms)
   dend=anytim2utc(self->getprop(/tend),/vms)
-  
+
   vmess='Please wait. Searching for GOES/'+amess+' data...'
-  mprint,vmess
+  if ~quiet then mprint,vmess
   if widget then xbanner,vmess,group=gbase
 
   self->fix_keywords,extra
-  
+
   sat_num = goes_sat(sat,/num) ; rd_goes_sdac wants sat num, not index (e.g. 15, not 0)
-  
+
   if euv gt 0 then begin
     euv_used=1
     rd_geuv, stime=dstart, etime=dend, sat=sat_num, euv=euv, $
@@ -1248,165 +1363,201 @@ pro goes::read,tstart,tend,$
       err_msg=err, error=error, verbose=verbose, _extra=extra
     if err eq '' && exist(times) then begin
       base_sec = min(times)
-      sdac_used = 0
+      arch_used = -1
       euv_used = euv
     endif else times = -1
-    
+
   endif else begin
+
     euv_used = 0
-    arch_order = (sdac le 1) ? sdac : ((sdac eq 2) ? [0,1] : [1,0])
-    narch = long((sdac gt 1))
-    for iarch = 0,narch do begin
-      sdac_used = arch_order[iarch]
-      if sdac_used then begin
-        rd_goes_sdac, tarray=times, yarray=data,clobber=force,$
-          stime=dstart, etime=dend, error=error,remote=remote, $
-          sat=sat_num, numstat=numstat, tstat=tstat, stat=stat,widget=widget,$
-          err_msg=err, /sdac, base_sec=base_sec, verbose=verbose, _extra=extra
-        if err eq '' && exist(times) then begin
-          times = temporary(times) + base_sec
-          if numstat gt 0 then tstat = temporary(tstat) + base_sec
-        endif else times=-1
-        if (is_string(err) || n_elements(times) le 2) && (narch gt 0) && (iarch lt narch) then begin
-         mprint,err
-         vmess='Switching to searching GOES/Yohkoh archive.'
-         mprint,vmess
-         if widget then xbanner,vmess,/append
-        endif
-       endif else begin
-        rd_goes_yohkoh,times,trange=[dstart,dend],_extra=extra,err=err,remote=remote,clobber=force,$
-          type=type,gdata=gdata,sat=sat_num, verbose=verbose, check_sdac=0,widget=widget
-        if (is_string(err) || n_elements(times) le 2) && (narch gt 0) && (iarch lt narch) then begin
-         mprint,err
-         vmess='Switching to searching GOES/SDAC archive.'
-         if verbose then mprint,vmess
-         if widget then xbanner,vmess,/append
-        endif
-      endelse
-      if n_elements(times) gt 2 then break
-    endfor
+
+    arch_order = arch eq 0 ? [1,2,3] : arch  ; noaa,sdac,yohkoh
+    narch = n_elements(arch_order)
+    for iarch = 0,narch-1 do begin
+
+      arch_try = arch_order[iarch]
+
+      if iarch gt 0 then begin
+        vmess='Switching to searching ' + self.ar_names[arch_try] + ' archive.'
+        if verbose then mprint,vmess
+        if widget then xbanner,vmess,/append
+      endif
+
+      case arch_try of
+        1: begin
+
+          ;----- Read NOAA archive
+          rd_goes_nc, trange=[dstart,dend], verbose=verbose, widget=widget, $
+            times=times, gdata=gdata, sat=sat_num, err_msg=err,_extra=extra
+
+          if err eq '' && exist(times) then arch_used = 1
+        end
+
+        2: begin
+
+          ; Read SDAC archive
+          rd_goes_sdac, tarray=times, yarray=data,clobber=force,$
+            stime=dstart, etime=dend, error=error,remote=remote, $
+            sat=sat_num, numstat=numstat, tstat=tstat, stat=stat,widget=widget,$
+            err_msg=err, /sdac, base_sec=base_sec, verbose=verbose, _extra=extra
+          if err eq '' && exist(times) then begin
+            arch_used = 2
+            times = temporary(times) + base_sec
+            if numstat gt 0 then tstat = temporary(tstat) + base_sec
+          endif else times=-1
+        end
+
+        3: begin
+
+          ; Read Yohkoh archive
+          rd_goes_yohkoh,times,trange=[dstart,dend],_extra=extra,err=err,remote=remote,clobber=force,$
+            type=type,gdata=gdata,sat=sat_num, verbose=verbose, check_sdac=0,widget=widget
+          if err eq '' && exist(times) then arch_used = 3
+        end
+
+      endcase
+
+      if n_elements(times) gt 2 then break else $ ; if found enough data, don't check other archive
+        if is_string(err) and ~quiet then mprint,err
+
+    endfor  ; end of loop trying different archives
   endelse
 
   if ~euv_used then begin
-   if is_string(err) || (n_elements(times) le 2) then return
+    if is_string(err) || (n_elements(times) le 2) then return  ; no data found, return
   endif else begin
 
-;-- leave the following for Kim to embed into rd_geuv
+    ;-- leave the following for Kim to embed into rd_geuv
 
-   amess='EUV'
-   if is_string(err) || (n_elements(times) le 2) then begin
-    err = is_string(err) ? err : 'No GOES/'+amess+' data for specified times.'
-    mprint,err
-    if widget then xbanner,err,/append
-    return 
-   endif else begin
-    vmess='Found GOES/'+amess+' data.'
-    mprint,vmess
-    if widget then xbanner,vmess,/append
-   endelse
+    amess='EUV'
+    if is_string(err) || (n_elements(times) le 2) then begin
+      err = is_string(err) ? err : 'No GOES/'+amess+' data for specified times.'
+      mprint,err
+      if widget then xbanner,err,/append
+      return
+    endif else begin
+      vmess='Found GOES/'+amess+' data.'
+      if ~quiet then mprint,vmess
+      if widget then xbanner,vmess,/append
+    endelse
   endelse
 
   sat = sat_num	; get the sat actually retrieved
-  self.sdac_used = sdac_used
+  self.arch_used = arch_used
   self.euv_used = euv_used
-  
+
   tmin=times[0]
   times=temporary(times)-tmin  ; now times are seconds relative to earliest time in accumulation
   utbase=anytim(tmin,/vms)     ; utbase is earliest time in accumulation
-  
-  if sdac_used || (euv_used gt 0) then begin
+
+  ; For SDAC or EUV, need to take care of status flags, and put data into gdata structure
+  if (arch_used eq 2) || (euv_used gt 0) then begin
     b = anytim(base_sec, /ints)
     if (is_number(numstat)) then begin
       self.numstat = numstat
-      
+
       ;-- need to use ptr_free and not ptr_empty since following lines
       ;   overwrite with new pointer
-      
+
       ptr_free, self.tstat
       ptr_free, self.stat
       self.tstat   = ptr_new(temporary(tstat)-tmin,/no_copy)  ; make relative to utbase too
       self.stat    = ptr_new(stat,/no_copy)
     endif else self.numstat = -1
-    
+
     gbo_struct, gxd_data=data_ref
-    
+
     gdata      = make_array(n_elements(times),value=data_ref,/nozero)
     ;   gdata.time = temporary(times * 1000)  ; gdata.time is LONG, so store as msec to keep precision
     gdata.day  = b.day
     gdata.lo   = temporary(data[*,0])
-    if sdac_used || (euv_used eq 3) then gdata.hi   = temporary(data[*,1])  ; for euva and euvb, this will stay 0
+    ; Fill in hi channel for SDAC data or for euve.  yohkoh and noaa already have hi filled in,
+    ; and euva,euvb don't have a second channel.
+    if (arch_used eq 2 and euv_used eq 0) || (euv_used eq 3) then gdata.hi   = temporary(data[*,1])  ; for euva and euvb, this will stay 0
     gdata=rep_tag_value(gdata,times,'time',/no_copy) ; time tag was LONG.  replace it with DBL
-    
-  endif else begin
-  
+
+  endif else begin  ; for Yohkoh or NOAA, don't have status flags
+
     self.numstat = -1
     ptr_empty, self.tstat
     ptr_empty, self.stat
     ;    gdata.time = temporary(times * 1000)  ; gdata.time is LONG, so store as msec to keep precision
     gdata=rep_tag_value(gdata,times,'time',/no_copy) ; time tag was LONG.  replace it with DBL
-    
+
   endelse
-  
+
+  ;For non-euv, sats 8-15 from sdac or yohkoh archive, undo the NOAA scaling
+  if euv_used eq 0 and arch_used ge 2 and (sat ge 8 and sat le 15) then begin
+    ; Some bad values are flagged by the value -99999, so don't scale those
+    qlo = where(gdata.lo ne -99999.0, nlo)
+    qhi = where(gdata.hi ne -99999.0, nhi)
+    if nlo gt 0 then gdata[qlo].lo = gdata[qlo].lo / unscale_8to15_factors[0]
+    if nhi gt 0 then gdata[qhi].hi = gdata[qhi].hi / unscale_8to15_factors[1]
+    gdata_unscale_applied = 1
+  endif else gdata_unscale_applied = 0
+
+
   *self.gdata=temporary(gdata)
-  
+
   self->set,sat=sat,utbase=utbase
-  
+  self.gdata_unscale_applied = gdata_unscale_applied
+
   ; store last accumulation parameters
   self.lstart=anytim2tai(dstart)
   self.lend=anytim2tai(dend)
   self.lsat = self->sat2index(sat)
-  self.lsdac = sdac
+  self.larch = arch
   self.leuv = euv
   self.lmode = self.mode  ;need to check if this mode was actually used (type from rd_goes?) ?????????
   self.lremote=self->getprop(/remote)
   return & end
-  
+
   ;--------------------------------------------------------------------------
   ; Function to return GOES satellite index from string or number or extra structure, i.e. input
   ; equal to 12 or 'GOES12' or is structure with tag goes12 returns 0
-  
+
 function goes::sat2index, val
 
   index = -1
-  
+
   input = val
-  
+
   if is_struct(input) then begin
     if have_tag(input,'goe',/start,ind) then begin
       gsat = (tag_names(input))[ind]
       input = stregex(gsat,'[0-9]+',/sub,/extra)
     endif
   endif
-  
+
   number = is_number(input)
-  
+
   chk=where(strup(input) eq goes_sat(number=number),count)
   if count gt 0 then index = chk[0]
-  
+
   return, index
 end
 
 
 ;--------------------------------------------------------------------------
 ; Function to check whether we need to read data files again.
-; If satellite, sdac/yohkoh, mode (for yohkoh) changed, or new time is not within last
+; If satellite, sdac/yohkoh,/noaa, mode (for yohkoh) changed, or new time is not within last
 ; time accumulated, then return 1
 
 function goes::need_update
 
   if ~self->have_gdata() then return, 1
-  
+
   if self.sat ne self.lsat then return, 1
   if self.euv ne self.leuv then return, 1
-  if self.sdac ne self.lsdac then return, 1
+  if self.arch ne self.larch then return, 1
   if self.remote ne self.lremote then return,1
-  if ~self.sdac and self.mode ne self.lmode then return, 1
-  
+  if (self.arch ne 2) and (self.mode ne self.lmode) then return, 1  ; arch=2 is sdac, and sdac doesn't have diff modes
+
   if ~( (self.tstart ge self.lstart) and (self.tstart le self.lend) and $
     (self.tend ge self.lstart) and (self.tend le self.lend) ) then return,1
-    
+
   return, 0
-  
+
 end
 
 ;--------------------------------------------------------------------------
@@ -1416,9 +1567,9 @@ function goes::title
   ;res=['3 sec','1 min','5 min']
   ;return,goes_sat(self.sat)+' '+res[self.sdac_used ? 0 :self.mode]
   if self.euv gt 0 then return, goes_sat(self.sat) + ' ' + self->get_euvchan()
-  arch=['Yohkoh','SDAC']
-  return,(arch)[self.sdac_used]+' '+goes_sat(self.sat)+' '+self->get_res(/string)
-  
+  arch_name = self->get_arch_name()
+  return,arch_name+' '+goes_sat(self.sat)+' '+self->get_res(/string)
+
 end
 
 ;--------------------------------------------------------------------------
@@ -1428,9 +1579,10 @@ function goes::mk_file_id
 
   t1=trim(anytim2utc(self->getprop(/tstart),/vms,/trunc))
   t2=trim(anytim2utc(self->getprop(/tend),/vms,/trunc))
-  
-  file_id=self->title()+' '+trim(t1)+' to '+trim(t2)
-  
+
+  sc = self->get(/orig_scaling) && self->getprop(/gdata_unscale_applied) ? ' orig_sc' : ''
+  file_id=self->title()+sc+' '+trim(t1)+' to '+trim(t2)
+
   return,file_id
 end
 
@@ -1444,7 +1596,7 @@ function goes::get_mode,extra
   if is_struct(extra) then begin
     for i=0,nmodes-1 do if have_tag(extra,modes[i],/start) then return,i
   endif
-  
+
   if is_string(extra) then begin
     for i=0,nmodes-1 do begin
       textra=strup(extra)
@@ -1452,9 +1604,9 @@ function goes::get_mode,extra
       if count gt 0 then return,i
     endfor
   endif
-  
+
   return,self.mode
-  
+
 end
 
 ;----------------------------------------------------------------------------
@@ -1463,8 +1615,19 @@ end
 function goes::get_res, string=string
   sat = goes_sat(self.sat, /num)
   hres = sat gt 12 ? 2 : 3
+  if sat gt 15 then hres = 1
   res = keyword_set(string) ? [trim(hres)+' sec','1 min','5 min'] : [hres,60,300.]
-  return, res[self.sdac_used ? 0 : self.mode]
+  return, res[(self.arch_used ne 2) ? self.mode : 0]  ; i.e. for noaa or yohkoh use mode
+end
+
+;----------------------------------------------------------------------------
+
+; Return name of archive 'Any', 'NOAA', 'SDAC', 'YOHKOH' based on arch_in argument or arch_used
+; If arch_in is passed in, its values are 0,1,2,3 for any, noaa, sdac, yohkoh.  If not, use value of arch_used,
+;   (arch_used = [1,2,3] for noaa,sdac,yohkoh)
+function goes::get_arch_name, arch_in
+  archu = n_params() eq 1 ? arch_in : self.arch_used
+  return, self.ar_names[archu]
 end
 
 ;----------------------------------------------------------------------------
@@ -1489,32 +1652,19 @@ end
 
 pro goes::sat_times, out=out
 
-  out=['XRS Coverage:', $
-    'GOES 91 -  01-Jul-1974   to   17-Oct-1975', $
-    'GOES 92 -  05-Feb-1975   to   31-Mar-1978', $
-    'GOES 1  -  17-Jan-1976   to   01-Jun-1978', $
-    ;     'GOES 2  -  01-Aug-1977   to   04-Jan-1980', $
-    ;     'GOES 3  -  05-Jul-1978   to   04-Jan-1980', $
-    ;     'GOES 6  -  04-Jan-1980   to   18-Aug-1994', $
-    'GOES 2  -  01-Aug-1977   to   30-Apr-1983', $
-    'GOES 3  -  05-Jul-1978   to   04-Jan-1980', $
-    'GOES 5  -  01-May-1983   to   30-May-1983, 01-Jul-1983  to  31-Jul-1984', $
-    'GOES 6  -  02-Jun-1983   to   30-Jun-1983, 01-Aug-1984  to  18-Aug-1994', $
-    'GOES 7  -  01-Jan-1994   to   03-Aug-1996', $
-    'GOES 8  -  21-Mar-1996   to   18-Jun-2003', $
-    'GOES 9  -  20-Mar-1996   to   24-Jul-1998', $
-    'GOES 10 -  10-Jul-1998   to   01-Dec-2009', $
-    'GOES 11 -  21-Jun-2006   to   11-Feb-2008', $
-    'GOES 12 -  13-Dec-2002   to   08-May-2007', $
-    'GOES 13 -  13-Jan-2015   to   present', $
-    'GOES 14 -  02-Dec-2009   to   04-Nov-2010', $
-    'GOES 15 -  01-Sep-2010   to   present', $
-    '', $
-    'EUV Coverage:', $
-    'GOES 13  -  18-Jun-2006  to   27-Oct-2014, very spotty', $
-    'GOES 14  -  06-Apr-2010  to   04-Nov-2010, 14-Aug-2012  to  24-Nov-2012', $
-    'GOES 15  -  07-Apr-2010  to   26-Oct-2014']
-    
+  z = goes_sat_dates()
+  ; put 3 spaces before dash or 2 depending on # chars in sat, so they line up
+  dash = strarr(n_elements(z)) + '  -  '
+  q = where(strlen(z.sat) eq 1)
+  dash[q] = '   -  '
+  out = '  GOES ' + z.sat + dash + z.tstart + '  to  ' + z.tend
+  q = where(z.tsmore ne '', nq)
+  if nq gt 0 then out[q] = out[q] + ',  ' + z[q].tsmore + '  to  ' + z[q].temore
+  q = where(z.comment ne '', nq)
+  if nq gt 0 then out[q] = out[q] + ';  ' + z[q].comment
+  qx = where(z.det eq 'XRS', complement=qe)
+  out = ['XRS Coverage:', out[qx], '', 'EUV Coverage:', out[qe]]
+
   prstr, out, /nomore
 end
 
@@ -1529,17 +1679,19 @@ pro goes::help, widget=widget
   if self->have_gdata() then begin
     out = [out, '     ' + anytim2utc(self.lstart,/vms) + ' to ' + anytim2utc(self.lend,/vms)]
   endif else out = [out, '     None.']
-  
+
   if valid_time(self.tstart) and valid_time(self.tend) then begin
     out = [out,'   Current TSTART / TEND:', $
       '     ' + self->get(/tstart) + ' to ' + self->get(/tend)]
   endif
-  
-  archive = ['YOHKOH', 'SDAC', 'YOHKOH then SDAC', 'SDAC then YOHKOH']
+
+  archive = self.ar_names
   euv_chan = ['Not selected', 'EUVA', 'EUVB', 'EUVE']
   ; + 0 in following lines is to convert byte to fix, otherwise prints weird character
   out = [out, $
-    '   ARCHIVE: ' + archive[self.sdac], $
+    '   ARCHIVE: ' + archive[self.arch], $
+    '   ORIG_SCALING: ' + trim(self.orig_scaling), $
+    '   GDATA_UNSCALE_APPLIED: ' + trim(self.gdata_unscale_applied), $
     '   EUV: ' + euv_chan[self.euv], $
     '   MODE: ' + trim(self.mode), $
     '   DATA TYPE:  ' + self->title(), $
@@ -1569,16 +1721,16 @@ pro goes::help, widget=widget
       endif else bkout = [bkout, '       None:']
       out = [out,bkout]
     endelse
-    
+
   endif else out = [out, '     None']
-  
+
   out = [out, '   BACKGROUND FUNCTION: ' + self.bfunc]
-  
+
   if self.itimes[0] eq -1 then str_itimes = 'None' else begin
     itimes = self->get(/itimes)
     str_itimes = anytim(itimes[0],/vms) + ' to ' + anytim(itimes[1],/vms)
   endelse
-  
+
   val0 = 'None'
   val1 = 'None'
   if (*self.b0user)[0] ne -1 then $
@@ -1588,41 +1740,41 @@ pro goes::help, widget=widget
   out = [out, '   USER BACKGROUND:', $
     '     Channel 0 : ' + val0, $
     '     Channel 1 : ' + val1]
-    
+
   out= [out, $
     '   INTEGRATION TIMES: ', $
     '     ' + str_itimes, $
     '   ABUNDANCE: ' + self->get_abund_name(), $
     ' ']
-    
+
   if keyword_set(widget) then a = dialog_message (out, /info) else prstr, out, /nomore
-  
+
   return & end
-  
+
   ;------------------------------------------------------------------------------
   ;-- have GOES data?
-  
+
 function goes::have_gdata,count=count
 
   count=0l
   chk=ptr_exist(self.gdata)
-  
+
   if chk then count=n_elements(*self.gdata)
-  
+
   return,chk
-  
+
 end
 
 ;-----------------------------------------------------------------------------------------
 ;-- Display message in IDL log.  If running from GUI, also display in a widget.
 
 pro goes::display_message, msg
-  
+
   print,'% GOES::DISPLAY_MESSAGE:'
   prstr, msg, /nomore
-  
+
   if xregistered('goes') gt 0 then r=dialog_message(msg)
-  
+
 end
 
 ;-----------------------------------------------------------------------------------------
@@ -1632,30 +1784,30 @@ end
 pro goes::select_background, _extra=extra, ch0=ch0,ch1=ch1
 
   bins = -99
-  
+
   ; if we want to replot with no bk sub before selecting intervals, uncomment
   ; these 2 lines and line below resetting bsub. But maybe best to use existing plot.
   ;bsub_sav = self->getprop(/bsub)
   ;self->plotman, bsub=0
-  
+
   case 1 of
     keyword_set(ch0): intervals=self->valid_b0times() ? anytim(self->get(/b0times)) : -1
     keyword_set(ch1): intervals=self->valid_b1times() ? anytim(self->get(/b1times)) : -1
     else: intervals = self->valid_btimes() ? anytim(self->get(/btimes)) : -1
   endcase
-  
+
   chtitle = ''
   if keyword_set(ch0) then chtitle=' for Channel 0'
   if keyword_set(ch1) then chtitle=' for Channel 1'
-  
+
   bins = self -> select_intervals ( $
     intervals=intervals,$
     title='Select Time Intervals for Background' + chtitle, $
     type='Background', $
     _extra=extra)
-    
+
   ;self -> set, bsub=bsub_sav
-  
+
   if bins[0] ne -99 then begin
     case 1 of
       keyword_set(ch0): self -> set, b0times=bins[0] eq -1 ? -1 : anytim(bins,/vms)
@@ -1663,7 +1815,7 @@ pro goes::select_background, _extra=extra, ch0=ch0,ch1=ch1
       else: self -> set, btimes=bins[0] eq -1 ? -1 : anytim(bins,/vms)
     endcase
   endif
-  
+
 end
 
 ;-----------------------------------------------------------------------------------------
@@ -1671,12 +1823,12 @@ end
 pro goes::show_background
 
   if ~self->valid_bktimes() then return
-  
+
   bktimes = self->get(/bktimes)
   q = where (bktimes ne '', count)
   bktimes = reform(bktimes[q], 2, count/2)
   self -> show_intervals, intervals=bktimes, type='Background'
-  
+
 end
 
 ;-----------------------------------------------------------------------------------------
@@ -1710,19 +1862,19 @@ end
 pro goes::select_integration_times, full_options=full_options,_extra=extra
 
   bins = -99
-  
+
   intervals = (self.itimes[0] eq -1) ? -1  : anytim(self->get(/itimes))
   type = 'Integration'
   title='Select a Single Time Interval for Integration'
-  
+
   bins = self -> select_intervals ( $
     intervals=(self.itimes[0] eq -1) ? -1  : anytim(self->get(/itimes)),$
     title='Select a Single Time Interval for Integration', $
     type='Integration', $
     max_intervals=1, _extra=extra)
-    
+
   if bins[0] ne -99 then self -> set, itimes=bins[0] eq -1 ? -1 : anytim(bins,/vms)
-  
+
 end
 
 ;-----------------------------------------------------------------------------------------
@@ -1730,7 +1882,7 @@ end
 pro goes::show_integration_times
 
   self -> show_intervals, intervals=self->get(/itimes), type='Integration'
-  
+
 end
 
 ;-----------------------------------------------------------------------------------------
@@ -1738,7 +1890,7 @@ end
 pro goes::show_intervals, intervals=intervals, type=type, widget=widget
 
   checkvar, type, ''
-  
+
   if intervals[0] ne -1 then begin
     plotman_obj = self -> get_plotman(valid=valid, /nocreate)
     if valid then $
@@ -1748,7 +1900,7 @@ pro goes::show_intervals, intervals=intervals, type=type, widget=widget
   endif else out = 'No ' + type + ' times defined.'
   prstr, out, /nomore
   if keyword_set(widget) then a=dialog_message(out, /info)
-  
+
 end
 
 ;-----------------------------------------------------------------------------------------
@@ -1759,11 +1911,11 @@ function goes::select_intervals, $
   title=title, $
   type=type, $
   _extra=extra
-  
+
   valid_range = anytim([self->get(/tstart), self->get(/tend)])
-  
+
   plotman_obj = self -> get_plotman(valid=valid)
-  
+
   if ~valid then begin
     case type of
       'Background': type_msg = ['You can select background times by setting the btimes parameter directly: ', $
@@ -1772,16 +1924,16 @@ function goes::select_intervals, $
         "a->set,itimes=['1-Jun-2002 07:53:39.000', '1-Jun-2002 08:34:36.000']" ]
       else: type_msg = ''
     endcase
-    
+
     a=dialog_message (['To use the interactive methods for selecting ',$
       'time intervals, you must include HESSI in your SSW IDL path for now.', $
       '', $
       type_msg], /error)
     return, -99
   endif
-  
+
   if keyword_set(full_options) then begin
-  
+
     ; use call_function because if hessi isn't in path, this won't compile
     bins = call_function (xsel_intervals,  $
       input_intervals=intervals, $
@@ -1793,12 +1945,12 @@ function goes::select_intervals, $
       /show_start, $
       /force, $
       _extra=extra )
-      
+
   endif else begin
-  
+
     ; if there's not a utplot currently showing in plotman, plot one
     if not plotman_obj->valid_window(/ut) then self -> plotman, _extra=extra
-    
+
     plotman_obj -> intervals, title=title, $
       type=type, $
       intervals=intervals, $
@@ -1806,13 +1958,13 @@ function goes::select_intervals, $
       /no_replot, $
       /force, $
       _extra=extra
-      
+
     bins = plotman_obj->get( /intervals )
-    
+
   endelse
-  
+
   return, bins
-  
+
 end
 
 ;---------------------------------------------------------------------------
@@ -1824,7 +1976,7 @@ end
 pro goes::savefile, filename=filename, nodialog=nodialog, _extra=extra
 
   if keyword_set(extra) then self -> set, _extra=extra
-  
+
   if ~is_string(filename) then begin
     if ~keyword_set(nodialog) then begin
       filename = dialog_pickfile (path=curdir(), filter='*.sav', $
@@ -1835,7 +1987,7 @@ pro goes::savefile, filename=filename, nodialog=nodialog, _extra=extra
       endif
     endif
   endif
-  
+
   readme = ['Variables stored in GOES save file: ', $
     '', $
     'SATELLITE - Satellite: GOES 6, 7, 8, 9, 10, 11, 12...', $
@@ -1865,13 +2017,13 @@ pro goes::savefile, filename=filename, nodialog=nodialog, _extra=extra
     'B1USER  - User background for Chan 1', $
     '', $
     'ABUND_MODEL - Abundance Spectral Model' ]
-    
+
   struct = self -> getdata(/struct)
   satellite = self -> get(/sat)
   asciibase = self -> getprop(/utbase)
   utbase = anytim(asciibase)
   abund_model = self->get_abund_name()
-  
+
   tarray = struct.tarray
   yclean = struct.yclean
   flux_deriv = [ [deriv(struct.tarray,struct.yclean[*,0])], [deriv(struct.tarray,struct.yclean[*,1])] ]
@@ -1887,16 +2039,16 @@ pro goes::savefile, filename=filename, nodialog=nodialog, _extra=extra
   bk = struct.bk
   b0user = *self.b0user
   b1user = *self.b1user
-  
+
   ; if still no filename defined, autoname it (don't do this farther up because
   ; until we call getdata, we don't have the correct utbase)
   if ~is_string(filename) then $
     filename = 'idlsave_goes_' + time2file(self.utbase) + '.sav'
-    
+
   save, filename=filename, $
     readme, satellite, asciibase, utbase, tarray, yclean, flux_deriv, emis, tempr, lrad, lx, $
     ch0_bad, ch1_bad, bsub, bktimes, bfunc, bk, b0user, b1user, abund_model, /xdr
-    
+
   msg = ['', $
     'Saved in IDL save file ' + filename, $
     '', $
@@ -1905,7 +2057,7 @@ pro goes::savefile, filename=filename, nodialog=nodialog, _extra=extra
     "restore, '" + filename, $
     'prstr, readme']
   self -> display_message, msg
-  
+
 end
 
 ;---------------------------------------------------------------------------
@@ -1918,12 +2070,12 @@ end
 pro goes::textfile, filename=filename, nodialog=nodialog, _extra=extra
 
   if keyword_set(extra) then self -> set, _extra=extra
-  
+
   if self.euv gt 0 then begin
     self->display_message, 'Text output not implemented yet for EUV data. Aborting'
     return
   endif
-  
+
   if ~is_string(filename) then begin
     if ~keyword_set(nodialog) then begin
       filename = dialog_pickfile (path=curdir(), filter='*.txt', $
@@ -1934,37 +2086,37 @@ pro goes::textfile, filename=filename, nodialog=nodialog, _extra=extra
       endif
     endif
   endif
-  
+
   d = self -> getdata(/struct)
-  
+
   out = ['GOES data for time interval: ' + self->get(/tstart) + ' to ' + self->get(/tend), $
     'Current time: ' + !stime, $
-    'GOES archive: ' + (self->get(/sdac_used) ? 'SDAC' : 'Yohkoh'), $
+    'GOES archive: ' + self->get_arch_name(), $
     'Data Type: ' + self->title(), $
     'Data are ' + (d.yes_clean ? 'Cleaned' : 'Not Cleaned'), $
     'Background ' + (d.yes_bsub ? 'is' : 'is not') + ' subtracted.', $
     '' ]
-    
+
   if ~d.yes_bsub then out = [out, 'NOTE: ', $
     'You should subtract background for better estimation of emission measure and temperature.', '']
-    
+
   header = [strpad('Time at center of bin', 25, /after) + $
     string('1.0 - 8.0 A', '0.5 - 4.0 A', 'Emission Meas', 'Temp', '1.0 - 8.0 A', '0.5 - 4.0 A', format='(6a15)'), $
     strpad(' ', 85) + string('Derivative', 'Derivative', format='(2a15)'), $
     strpad(' ', 25) + $
     string('watts/m^2', 'watts/m^2', '10^49/cm^3', 'MK', 'watts/m^2/s', 'watts/m^2/s',format='(6a15)') ]
   out = [out, header, '']
-  
+
   y = d.yes_bsub ? d.ybsub : d.yclean
   deriv0 = deriv(d.tarray,d.yclean[*,0])
   deriv1 = deriv(d.tarray,d.yclean[*,1])
   str = string(transpose( [ [y[*,0]], [y[*,1]], [d.em], [d.tem], [deriv0], [deriv1] ] ), format='(6g15.5)')
   times = anytim( anytim(d.utbase) + d.tarray, /vms)
   out = [out, times + ' ' + str]
-  
+
   checkvar, filename, 'goes_data.txt'
   prstr, file=filename, out
-  
+
   self -> display_message, 'Text file written: ' + filename
 end
 
@@ -1981,32 +2133,32 @@ end
 ;
 function goes::get_gev, timestart, timeend, count=count, struct=struct, class_decode=class_decode, $
   show=show, _extra=_extra
-  
+
   checkvar, timestart, anytim2utc(self->getprop(/tstart),/vms)
   checkvar, timeend, anytim2utc(self->getprop(/tend),/vms)
-  
+
   ngdc = anytim(timeend) lt anytim('25-aug-1991')
-  
+
   gev = get_gev(timestart, timeend, count=count, ngdc=ngdc, err=err)
   if err ne '' then begin
     message,/info, err
     count = 0
     return,-1
   endif
-  
+
   if count eq 0 then begin
     message, /info, 'No events found in time range
     return,-1
   endif
-  
+
   decode_gev, gev, gstart,gend,gpeak,class=class,loc=loc,noaa_ar=noaa_ar,/vms
-  
+
   sp = '   '
   out_string = strmid(gstart,0,17) + sp + strmid(gpeak,12,5) + sp + $
     strmid(gend,12,5) + sp + class + sp + loc + sp + noaa_ar
-    
+
   if keyword_set(show) then prstr,out_string,_extra=_extra
-  
+
   if keyword_set(struct) then begin
     if keyword_set(class_decode) then begin
       class = trim(class)  ; get rid of any extra blanks
@@ -2020,7 +2172,7 @@ function goes::get_gev, timestart, timeend, count=count, struct=struct, class_de
     struct = {gstart:gstart, gend:gend, gpeak:gpeak,class:class,loc:loc,noaa_ar:noaa_ar}
     return, reform_struct(struct)
   endif else return, out_string
-  
+
 end
 
 ;---------------------------------------------------------------------------
@@ -2032,19 +2184,22 @@ pro goes__define
     tstart:0.d0,$
     tend: 0.d0,$
     sat:0,$
-    sdac: 0, $   ; 0/1/2/3 means use yohkoh/sdac/yohkoh_then_sdac/sdac_then_yohkoh archive of goes files
-    euv: 0, $    ; 0,1,2,3 means don't use euv, or 1/2/3 use EUVA, EUVB, EUVE
-    sdac_used: 0, $
+    ar_names: strarr(4), $  Names of archives:
+    arch: 0, $   ; 0,1,2,3 means use any, noaa, sdac, yohkoh archive of goes files
+    arch_used: 0, $ 1,2,3  means noaa/sdac/yohkoh was used
+    euv: 0, $    ; 0,1,2,3: 0 means don't use euv, 1/2/3 means use EUVA, EUVB, EUVE
     euv_used: 0, $  ; if set, current accumulation used euv data
-    mode: 0, $   ; mode = 0,1,2 = 3 sec, 1 min, 5 min
-    gdata:ptr_new(),$
+    mode: 0, $   ; mode = 0,1,2 = hi res, 1 min, 5 min
+    gdata:ptr_new(),$   ; data structure read from file, always stored as 'true flux'
+    orig_scaling: 0, $  ; if set, return data as it was in input file (rescaled if it was unscaled in gdata)
+    gdata_unscale_applied: 0, $  ; if set, data stored in gdata required unscaling (depends on data source)
     numstat: 0L, $
     tstat: ptr_new(), $
     stat: ptr_new(), $
     lstart:0.d, $   ; lstart through lmode are settings of last accumulation
     lend:0.d, $
     lsat:0, $
-    lsdac:0, $
+    larch:0, $
     leuv:0, $
     lremote:0b,$
     lmode:0, $
@@ -2067,6 +2222,6 @@ pro goes__define
     plotman_obj: obj_new(), $
     remote:0b,$
     inherits utplot}
-    
+
   return & end
 

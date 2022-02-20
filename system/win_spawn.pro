@@ -57,6 +57,8 @@
 ;        - automatically delete temporary files
 ;        - added @ECHO OFF to inhibit outputting spawn command
 ;        - deprecated TEMP_FILE keyword
+;       7-Jun-2019, Zarro (ADNET) 
+;        - replaced output printing with /LOG_OUTPUT keyword
 ;-
 
 pro win_spawn, command,out, count=count,_ref_extra=extra,$
@@ -64,7 +66,7 @@ pro win_spawn, command,out, count=count,_ref_extra=extra,$
 
 os=os_family(/lower)
 count=0 & err=''
-if os ne 'windows' or is_blank(command) then begin
+if os ne 'windows' || is_blank(command) then begin
  out=''
  return
 endif
@@ -76,12 +78,15 @@ out=''
 
 ncmd=n_elements(command)
 if ncmd eq 1 then cmd=command else begin
- temp_file=get_temp_file('win_spawn.bat')
+ temp_file=get_temp_file('_win_spawn.bat')
  file_append,temp_file,['@ECHO OFF',command],/new
  cmd=temp_file
 endelse
 
-spawn,cmd,out,err,count=count,/hide,_extra=extra
+
+if print_out then $
+ spawn,cmd,count=count,/stderr,/log_output,/hide,_extra=extra else $
+  spawn,cmd,out,err,count=count,/hide,_extra=extra
 
 if keyword_set(test) then begin
  message,'testing...',/cont
@@ -91,7 +96,7 @@ endif
 if n_elements(out) eq 1 then out=out[0]
 if is_string(err) then err=arr2str(err)
 if ncmd gt 1 then file_delete,temp_file,/quiet,/allow_nonex
-if is_string(out) and print_out then print,out
+;if is_string(out) and print_out then print,out
 
 return
 end

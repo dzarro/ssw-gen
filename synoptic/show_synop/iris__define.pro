@@ -7,7 +7,8 @@
 ;
 ; Category    : Objects
 ;
-; History     : 8 March 2017, Zarro (ADNET) - written
+; History     : 8-March-2017, Zarro (ADNET) - written
+;               9-Jan-2019, Zarro (ADNET) - made WCS default
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
@@ -83,7 +84,7 @@ for i=0,count-1 do begin
 
  nimg=n_elements(index)
  for j=0,nimg-1 do begin
-  self->mk_map,index[j],data[*,*,j],k,_extra=extra,filename=dfile
+  self->mk_map,index[j],data[*,*,j],k,_extra=extra,filename=dfile,/use_wcs
   self->set,k,grid=30,/limb,/log
   self->colors,k
   k=k+1
@@ -147,6 +148,7 @@ end
 ;-- check for IRIS and SDO branches in !path
 
 function iris::have_path,err=err,verbose=verbose
+
 
 err=''
 if ~have_proc('read_sdo') then begin

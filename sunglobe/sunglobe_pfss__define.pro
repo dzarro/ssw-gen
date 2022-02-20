@@ -61,6 +61,7 @@
 ; History     :	Version 1, 08-Feb-2016, William Thompson, GSFC
 ;               Version 2, 09-Feb-2018, WTT, use RADSTART to improve results
 ;               Version 3, 20-Mar-2018, WTT, added EXZONE keyword
+;               Version 4, 10-Apr-2019, WTT, fix pointer free bug
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -111,7 +112,7 @@ for i=0,self.npt-1 do ((*self.polines)[i])->setproperty, _extra=_extra
 ;
 rebuild = 0
 if datatype(sstate) eq 'STC' then begin
-    ptr_destroy, self.psstate
+    ptr_free, self.psstate
     self.psstate = ptr_new(sstate)
     rebuild = 1
 endif

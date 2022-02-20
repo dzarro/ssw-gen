@@ -3,7 +3,8 @@ function mkthumb, data, r, g, b, 				$
    outsize=outsize, factor=factor, ns=ns, nx=nx, ny=ny, 	$
    ss=ss, outfile=outfile, ingif=ingif, 			$
    film=film, nofilm=nofilm, frame=frame,			$
-   time=time, vertical=vertical, labstyle=labstyle, maxxy=maxxy
+   time=time, vertical=vertical, labstyle=labstyle, maxxy=maxxy, $
+   corexy=corexy
 ;+
 ;   Name: mkthumb
 ;   
@@ -20,7 +21,9 @@ function mkthumb, data, r, g, b, 				$
 ;      nx,ny   - if set, thumbnail output size (in lieu of OUTSIZE or FACTOR)
 ;      maxxy   - if set, apply this to largest nx/ny dimension
 ;                (used to limit output size for extremely rectangular input)
+;      corexy  - if set, used with maxxy to extract 'core' in high aspect rat
 ;      r,g,b   - optional color table (only used if outfile specified)
+;      corexy -  limit thumb to central core of images 
 ;      vertical - if set, stack movies and lables in vertical icon
 ;
 ;   History:
@@ -32,6 +35,7 @@ function mkthumb, data, r, g, b, 				$
 ;      17-nov-1999 (SLF) - add LABSTYLE (execute string -> align_label.pro)
 ;      8-Sep-2005, Zarro (L-3Com/GSFC) - add SSW_WRITE_GIF
 ;     11-oct-2006 (SLF) - add MAXXY keyword & function
+;      2-mar-2009 (SLF)   fix an aspect ratio issue when corexy USED
 ;-
 if n_elements(charsize) eq 0 then charsize=1.
 vertical=keyword_set(vertical)				; orientation
@@ -55,17 +59,34 @@ endif
 ; -------------------------------------------------------
 
 ; get some data parameters 
+corexy=keyword_set(corexy)
+
+if corexy then begin 
+   nx=data_chk(data,/nx)
+   ny=data_chk(data,/ny)
+   tempdata=temporary(data) ; meke a copy
+   data=tempdata( (nx/2-maxxy)>0:(nx/2+maxxy)<(nx-1), $
+                  (ny/2-maxxy)>0:(ny/2+maxxy)<(ny-1),*)
+   nx=data_chk(data,/nx) ; reset aspect ratio
+   ny=data_chk(data,/ny)
+endif
+
 sdata=size(data)
 tdata=data_chk(data,/type)
 ddata=data_chk(data,/ndimen)
 
 dx=data_chk(data,/nx)
 dy=data_chk(data,/ny)
-if keyword_set(maxxy) then begin 
+if keyword_set(maxxy)  then begin 
    delvarx,nx,ny,outsize,factor   ; override all of these
-   if dy gt dx then ny=maxxy else nx=maxxy
+   if dy gt dx then begin 
+      ny=maxxy 
+      nx=round(float(dx)/(float(dy)/ny))
+   endif else begin 
+      nx=maxxy
+      ny=round(float(dy)/(float(dx)/nx))
+   endelse
 endif
-
 ; -------------------------------------------------------
 case 1 of
    n_elements(ingif) ne 0: 
@@ -104,6 +125,8 @@ if not keyword_set(ny) then ny= round( (float(nx)/sdata(1))*sdata(2))
 ; ---------------- make thumbnail array -------------------------
 out=bytarr(nx,ny,ns)
 for i=0,ns-1 do out(0,0,i)=congrid(data(*,*,ss(i)),nx,ny)
+
+if corexy then data=temporary(tempdata)
 
 ; write thumbnail to Z-buffer
 dtemp=!d.name

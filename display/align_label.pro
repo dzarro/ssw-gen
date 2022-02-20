@@ -95,7 +95,7 @@ for i=0,n_elements(etags)-1 do begin
 endfor  
 
 yfact=n_elements(str2arr(strupcase(label),'!C'))    ; number lines in label
-xyouts, 0, 0, label, width=width, size=-1           ; width (normal coord)
+xyouts, 0, 0, label, width=width, size=-1,/normal           ; width (normal coord)
 
 ; --------------- derive x,y,sx,sy -----------------
 sizex=width*float(charsize)*!d.x_vsize              ; width in pixels

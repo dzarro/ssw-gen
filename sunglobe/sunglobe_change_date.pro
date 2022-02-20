@@ -26,6 +26,9 @@
 ;               Version 5, 18-Nov-2016, WTT, apply SSTATE.HIDEORBIT
 ;                                            check if SunSPICE is loaded
 ;               Version 6, 05-Mar-2018, WTT, Rebuild magnetic connection point
+;               Version 7, 01-Apr-2019, WTT, update active region IDs
+;               Version 8, 10-Apr-2019, WTT, diff. rot. Conn. Tool image
+;               Version 9, 18-Aug-2021, WTT, diff. rot. FOV paint image
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -36,6 +39,8 @@ pro sunglobe_change_date, sstate
 ;
 widget_control, /hourglass
 for i=0,sstate.nmapped-1 do sunglobe_diff_rot, sstate, i
+if ptr_valid(sstate.pconnfile) then sunglobe_diff_rot, sstate, /connfile
+if ptr_valid(sstate.pfovpaint) then sunglobe_diff_rot, sstate, /fovpaint
 ;
 ;  Also differentially rotate the magnetic field lines, if applicable.
 ;
@@ -76,6 +81,11 @@ if build_orbit then begin
     sstate.omodelrotate->add, sstate.oorbit
     sstate.oorbit->setproperty, hide=sstate.hideorbit
 endif
+;
+;  Update the NOAA active region IDs.
+;
+if obj_valid(sstate.onar) then $
+  sstate.onar->setproperty, target_date=sstate.target_date
 ;
 ;  Update the display.
 ;

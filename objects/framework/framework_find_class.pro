@@ -47,6 +47,8 @@
 ;       framework__define
 ;
 ; HISTORY:
+;       01-Sep-2020, Kim. Get number of source objects allowed, and start counting 
+;                    backward from there(previously hard-coded to 29)
 ;       11-apr-2011, Kim. Start looping backward at index 29, not 9 (there's
 ;                    space for 30 objects, but previously assumed would never
 ;                    use for more than 10)
@@ -90,7 +92,12 @@ endif
 ; recursion is much nicer that the earlier crap!
 ; again a lesson from 2nd month of undergrad course
 
-for i=29, 0, -1 do begin
+; 1-sep-2020, Kim changed to find allowed # sources. Previously was 30, so started at 29.
+obj_str = obj_struct(this_object)
+if ~is_struct(obj_str) then return, -1
+nsrc = tag_exist(obj_str, 'source') ? n_elements(obj_str.source) : 0
+if nsrc eq 0 then return, -1
+for i=nsrc-1, 0, -1 do begin
     already_traversed = 0
     source_obj = this_object->Get( /source, src_index = i )
     if obj_valid( source_obj ) then begin

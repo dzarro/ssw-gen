@@ -153,7 +153,7 @@
 ;                23-Jan-2012, Kim. al_legend had problems with Z
 ;                buffer plots.  Use ssw_legend (renamed from legend)
 ;                19-Feb-2012, Zarro (ADNET)
-;                 - changed message,/cont to message,/info because
+;                 - changed message,/cont to mprint,/info because
 ;                   /cont was setting !error_state
 ;                8-Mar-2012, Kim. In use_colors and set_colors, when checking if dim1_color is set by using
 ;                  string(), make it non-byte first, since string(0b) is blank, not '0', so black (0) didn't work
@@ -169,6 +169,12 @@
 ;                31-July-2016, Zarro (ADNET)
 ;                 - inherit DOTPROP to support "." syntax
 ;                15-Nov-2017, Kim. Added extract_arrays method. Called from set if input is in structure.
+;                27-Sep-2019, Kim. In operation method, if doing deriv and edata exists, call derivsig for errors
+;                  In operation method added keyword edata, and in
+;                  get_ydata method pass edata to operation.
+;                4-Feb-2020, Zarro (ADNET) 
+;                 - added SYMLOG plot option
+;                 - changed "or" to ||, "and" to &&, and message to mprint
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-
@@ -225,7 +231,7 @@ end
 
 pro xyplot::empty,deallocate=deallocate, _extra=extra
 
-  self->free_var,no_deallocate=1-keyword_set(deallocate), _extra=extra
+  self->free_var,no_deallocate=~keyword_set(deallocate), _extra=extra
 
   self.filename=''
   self.id=''
@@ -241,8 +247,8 @@ function xyplot::allow_sum
   if ~sum then return,0b
 
   xtype=self->get(/xtype)
-  if (xtype eq 2) or (xtype eq 3) then begin
-    message,'Y-DATA summing is disabled for XTYPE = '+strtrim(xtype,2),/info
+  if (xtype eq 2) || (xtype eq 3) then begin
+    mprint,'Y-DATA summing is disabled for XTYPE = '+strtrim(xtype,2),/info
     self->set,dim1_enab_sum=0b
     self->set,dim1_sum=0b
     return,0b
@@ -263,7 +269,7 @@ pro xyplot::set,xdata=xdata,ydata=ydata,edata=edata,input_struct=input_struct, $
   if keyword_set(input_struct) then begin
     self->extract_arrays, inp=input_struct, xdata=xdata, ydata=ydata, edata=edata, status=status, err_msg=err_msg
     if ~status then begin
-      message,err_msg,/info
+      mprint,err_msg,/info
       return
     endif
   endif
@@ -274,7 +280,7 @@ pro xyplot::set,xdata=xdata,ydata=ydata,edata=edata,input_struct=input_struct, $
 
   ;-- set plot properties
 
-  if is_string(extra) and ~keyword_set( no_set_plot ) then begin
+  if is_string(extra) && ~keyword_set( no_set_plot ) then begin
     self->set_plot,_extra=extra
     self->chan::set,_extra=extra
   endif
@@ -315,7 +321,7 @@ end
 ;  ydata - yarray dimensioned [nx,nt]
 ;  edata - error on yarray dimensioned [nx,nt]
 ;  status - 0/1 means failure/success
-;  err_msg - '' if success, error message otherwise
+;  err_msg - '' if success, error mprint otherwise
 ;
 ; Example:
 ;  In this example, we have two traces to plot, one with 10 points, one with 15 points.
@@ -349,7 +355,7 @@ pro xyplot::extract_arrays, input_struct=inp, xdata=xdata, ydata=ydata, edata=ed
   catch,error
   if error ne 0 then begin
     noname = !error_state.name eq 'IDL_M_USER_ERR'
-    message, err_state(), /info, noname=noname
+    mprint, err_state(), /info, noname=noname
     err_msg = 'Error in data provided in input structure.  Aborting.'
     catch,/cancel
     return
@@ -361,8 +367,8 @@ pro xyplot::extract_arrays, input_struct=inp, xdata=xdata, ydata=ydata, edata=ed
   qy = where(stregex(tags, '^y', /fold, /bool), ky)
   qe = where(stregex(tags, '^e', /fold, /bool), ke)
 
-  if kx*ky eq 0 then message, 'Input stucture must contain x and y values in x1,x2,... and y1,y2,... tags.'
-  if ke ne 0 and ke ne ky then message,'Number of error and y arrays in input structure are not equal.'
+  if kx*ky eq 0 then mprint, 'Input stucture must contain x and y values in x1,x2,... and y1,y2,... tags.'
+  if ke ne 0 && ke ne ky then mprint,'Number of error and y arrays in input structure are not equal.'
 
   ; For x, find max number of elements in x, and total number of traces, and save type (edges or not) of array
   nx = 0 & nt = 0 & no_edges = 1
@@ -375,7 +381,7 @@ pro xyplot::extract_arrays, input_struct=inp, xdata=xdata, ydata=ydata, edata=ed
 
   ;  xtype=1 and 3 have lo/hi edges.  If any have lo/hi instead of mid, all have to
   if n_elements(get_uniq(xtype mod 2)) ne 1 then $
-    message, 'In input structure, X arrays can not mix edges with midpoints.'
+    mprint, 'In input structure, X arrays can not mix edges with midpoints.'
 
   edges = (xtype[0] mod 2) eq 1 ; edges is set to 1 if all of x arrays have lo/hi edges
 
@@ -404,8 +410,8 @@ pro xyplot::extract_arrays, input_struct=inp, xdata=xdata, ydata=ydata, edata=ed
     nt = nt + n2
   endfor
 
-  if (nx_fromx ne nx) or (nt_fromx ne nt) then $
-    message, 'In input structure, number of values or number of traces for X and Y arrays are not equal.
+  if (nx_fromx ne nx) || (nt_fromx ne nt) then $
+    mprint, 'In input structure, number of values or number of traces for X and Y arrays are not equal.
 
   ;  Initialize ydata and edata arrays to all NaN array of correct dimension and type
 
@@ -433,7 +439,7 @@ pro xyplot::extract_arrays, input_struct=inp, xdata=xdata, ydata=ydata, edata=ed
   endif
 
   status = 1
-  message, /info, 'Combined input structure arrays, resulting in:'
+  mprint, /info, 'Combined input structure arrays, resulting in:'
   help,xdata,ydata,edata
   return
 
@@ -445,9 +451,9 @@ function xyplot::check_data,err_msg=err_msg
 
   err_msg=''
 
-  if ~self->has_xdata() or ~self->has_ydata() then begin
+  if ~self->has_xdata() || ~self->has_ydata() then begin
     err_msg = 'No data in X or Y array'
-    message,err_msg,/info
+    mprint,err_msg,/info
     return,0b
   endif
 
@@ -457,9 +463,9 @@ function xyplot::check_data,err_msg=err_msg
   self->check_ydata,*self.ydata_ptr,y_nx,y_ny,err_msg=err_msg
   if is_string(err_msg) then return,0b
 
-  if (x_nx ne y_nx) or ((x_ny gt 1) and (x_ny ne y_ny)) then begin
+  if (x_nx ne y_nx) || ((x_ny gt 1) && (x_ny ne y_ny)) then begin
     err_msg='# of X and Y data points do not match'
-    message,err_msg,/info
+    mprint,err_msg,/info
     return,0b
   endif
 
@@ -579,19 +585,19 @@ pro xyplot::set_dim1_vals, dim1_vals, status=status,err_msg=err_msg,no_copy=no_c
   if size(dim1_vals, /n_dimen) eq 2 then begin
     if data_chk(dim1_vals, /nx) ne 2 then begin
       err_msg = 'X array must be dimensioned n or (2,n)'
-      message, err_msg, /info
+      mprint, err_msg, /info
       status=0
       return
     endif
     ndim1= data_chk(dim1_vals,/ny)
   endif else begin
-    if self.ny eq 1 and n_elements(dim1_vals) eq 2 then ndim1=1 else $
+    if self.ny eq 1 && n_elements(dim1_vals) eq 2 then ndim1=1 else $
       ndim1=data_chk(dim1_vals,/nx)
   endelse
 
   ; if ndim1 ne self.ny then begin
   ;  msg = 'Warning - number of dim1 vals not equal to number of Y channels.'
-  ;  message,msg, /info
+  ;  mprint,msg, /info
   ; endif
 
   ; store dim1_vals as numbers.  If they came in as strings, must be times, so set flag.  ;kim 7/30/03
@@ -628,7 +634,7 @@ pro xyplot::set_plot,ylog=ylog,all=all,dim1_enab_sum=dim1_enab_sum,$
   nsum=nsum,legend_loc=legend_loc, label=label,stairs=stairs,$
   dim1_colors=dim1_colors, dim1_linestyles=dim1_linestyles,$
   charsize=charsize,dim1_use=dim1_use,xlog=xlog,histogram=histogram, $
-  fill_gaps=fill_gaps, psym=psym
+  fill_gaps=fill_gaps, psym=psym,symlog=symlog,delta=delta
 
   if is_number(all) then self.all= 0 > all < 1 else begin
     if exist(dim1_use) then if n_elements(dim1_use) ne self->get(/ny) then self.all=0
@@ -646,6 +652,8 @@ pro xyplot::set_plot,ylog=ylog,all=all,dim1_enab_sum=dim1_enab_sum,$
   if is_number(psym) then self.histogram = psym eq 10
   if is_number(histogram) then self.histogram =0b > histogram < 1b
   if is_number(stairs) then self.stairs =0b > stairs < 1b
+  if is_number(symlog) then self.symlog = 0b > symlog < 1b
+  if is_number(delta) then self.delta=abs(delta)
   if is_number(ylog) then self.ylog= 0b > ylog < 1b
   if is_number(xlog) then self.xlog= 0b > xlog < 1b
   if is_number(positive) then self.positive= 0b > positive < 1b
@@ -693,7 +701,7 @@ function xyplot::get_def_xrange,err_msg=err_msg
 
   if ~self->has_xdata() then begin
     err_msg='Warning - no X-DATA to plot'
-    message,err_msg,/info
+    mprint,err_msg,/info
     return,[0.,0]
   endif
 
@@ -718,7 +726,7 @@ function xyplot::get_def_yrange,err_msg=err_msg
 
   if ~self->has_ydata() then begin
     err_msg='Warning - no Y-data to plot'
-    message,err_msg,/info
+    mprint,err_msg,/info
     goto,done
   endif
 
@@ -727,7 +735,6 @@ function xyplot::get_def_yrange,err_msg=err_msg
   sum=self->allow_sum()
   nx=self->get(/nx)
   ylog=self->get(/ylog)
-
   nan=!values.d_nan
   ymin=replicate(nan,nchans)
   ymax=ymin
@@ -760,7 +767,7 @@ function xyplot::get_def_yrange,err_msg=err_msg
     dmin=min(ymin,/nan)
   endelse
 
-  if finite(dmin,/nan) or finite(dmax,/nan) then begin
+  if finite(dmin,/nan) || finite(dmax,/nan) then begin
     dmin=1. & dmax=1.
   endif
 
@@ -796,9 +803,9 @@ function xyplot::get,xdata=xdata,data_array=data_array,$
   title = title,ytitle=ytitle,status=status
 
   status=1b
-  if keyword_set(xdata) and self->has_xdata() then return,*self.xdata_ptr
+  if keyword_set(xdata) && self->has_xdata() then return,*self.xdata_ptr
 
-  if keyword_set(data_array) and self->has_ydata() then begin
+  if keyword_set(data_array) && self->has_ydata() then begin
     if keyword_set(all_chans) then return,reform(*self.ydata_ptr) else begin
       channels=self->get_channels()
       return,reform((*self.ydata_ptr)[*,channels])
@@ -890,11 +897,8 @@ pro xyplot::plot,overlay=overlay,err_msg=err_msg,status=status,$
 
   ;-- temporary structure to save initial state
 
-  ;xhour
-  ;state='temp={'+obj_class(self)+'}'
-  ;s=execute(state)
-
   temp=obj_struct(obj_class(self))
+
   struct_assign,self,temp
 
   status = 1
@@ -906,7 +910,7 @@ pro xyplot::plot,overlay=overlay,err_msg=err_msg,status=status,$
 
   if ~self->has_ydata() then begin
     err_msg = 'Warning - no Y-data to plot'
-    message, err_msg, /info
+    mprint, err_msg, /info
     self->empty_plot
     status=0
     return
@@ -921,6 +925,7 @@ pro xyplot::plot,overlay=overlay,err_msg=err_msg,status=status,$
   histogram=self->get(/histogram)
   ylog=self->get(/ylog)
   xlog=self->get(/xlog)
+  symlog=self->get(/symlog)
   positive=self->get(/positive)
   nx=self->get(/nx)
   channels=self->get_channels()
@@ -943,7 +948,7 @@ pro xyplot::plot,overlay=overlay,err_msg=err_msg,status=status,$
   if valid_range(xrange) then begin
     if xlog then begin
       xmin=min(xrange,max=xmax)
-      if (xmin le 0) or (xmax le 0) then begin
+      if (xmin le 0) || (xmax le 0) then begin
         drange=self->get_def_xrange()
         if xrange[0] le 0 then xrange[0]=drange[0]
         if xrange[1] le 0 then xrange[1]=drange[1]
@@ -961,9 +966,9 @@ pro xyplot::plot,overlay=overlay,err_msg=err_msg,status=status,$
 
   yrange=self->get(/yrange)
   if valid_range(yrange) then begin
-    if ylog or positive then begin
+    if ylog || positive then begin
       ymin=min(yrange,max=ymax)
-      if (ymin le 0) or (ymax le 0) then begin
+      if (ymin le 0) || (ymax le 0) then begin
         drange=self->get_def_yrange()
         if yrange[0] le 0 then yrange[0]=drange[0]
         if yrange[1] le 0 then yrange[1]=drange[1]
@@ -982,7 +987,7 @@ pro xyplot::plot,overlay=overlay,err_msg=err_msg,status=status,$
 
   ;-- construct plot keywords
 
-  plot_keywords={xlog:xlog,ylog:ylog,ytitle:data_unit,title:id}
+  plot_keywords={xlog:xlog,ylog:ylog || symlog,ytitle:data_unit,title:id}
   ;if xlog then plot_keywords = add_tag(plot_keywords, 'tick_label_exp', 'xtickformat')
   ;if ylog then plot_keywords = add_tag(plot_keywords, 'tick_label_exp', 'ytickformat')
   if xtitle ne '' then plot_keywords=add_tag(plot_keywords,xtitle,'xtitle')
@@ -999,7 +1004,7 @@ pro xyplot::plot,overlay=overlay,err_msg=err_msg,status=status,$
   ;-- check if histogram plotting
 
   xtype=self->get(/xtype)
-  dohist = ((xtype eq 1) or (xtype eq 3)) and histogram
+  dohist = ((xtype eq 1) || (xtype eq 3)) && histogram
 
   ; If X-DATA is 1-D, then use regular plot command
   ; If X-DATA is 2-D and we want a histogram style plot, create datplot command
@@ -1041,7 +1046,7 @@ pro xyplot::plot,overlay=overlay,err_msg=err_msg,status=status,$
 
       ;-- plot axis first without data
 
-      if (pcount eq 1) and ~ioverlay then begin
+      if (pcount eq 1) && ~ioverlay then begin
         nextra=rem_tag(textra,'color')
         self->plot_cmd,xdata,ydata,_extra=nextra,/nodata
       endif
@@ -1062,7 +1067,7 @@ pro xyplot::plot,overlay=overlay,err_msg=err_msg,status=status,$
   endfor
 
   wshow2
-  if (pcount eq 0) and ~ioverlay then $
+  if (pcount eq 0) && ~ioverlay then $
     self->plot_cmd,xdata,replicate(0,nx),_extra=textra
 
   self->write_legend,_extra=extra
@@ -1087,7 +1092,7 @@ pro xyplot::plot,overlay=overlay,err_msg=err_msg,status=status,$
   error=0
   catch,error
   if error ne 0 then begin
-    message,err_state(),/info
+    mprint,err_state(),/info
     catch,/cancel
   endif
 
@@ -1159,7 +1164,7 @@ end
 
 function xyplot::has_data
 
-  return, (self->has_xdata() and self->has_ydata())
+  return, (self->has_xdata() && self->has_ydata())
 
 end
 
@@ -1213,6 +1218,7 @@ pro xyplot::show
   print,'% XRANGE: ',self->get(/xrange)
   print,'% YRANGE: ',self->get(/yrange)
   print,'% YLOG: ',self->get(/ylog)
+  print,'% SYMLOG: ',self->get(/symlog)
   print,'% XLOG: ',self->get(/xlog)
   print,'% ALL/SUM/ENAB_SUM/WEIGHTED SUM: ',self->get(/all),self->allow_sum(),$
     self->get(/dim1_enab_sum), self->get(/weighted_sum)
@@ -1265,7 +1271,7 @@ function xyplot::valid_channels,channels
     ok=where( (valid lt ny) and (valid gt -1),count)
     if count gt 0 then valid=valid[ok] else begin
       valid=0
-      message,'Choice of channels to plot is invalid.  Plotting channel 0.', /infoinue
+      mprint,'Choice of channels to plot is invalid.  Plotting channel 0.', /infoinue
     endelse
     if count eq 1 then valid=valid[0]
   endif
@@ -1279,7 +1285,7 @@ pro xyplot::set_colors,dim1_colors
 
   ny=self->get(/ny)
   if exist(dim1_colors) then dim1_colors = dim1_colors
-  if ~exist(dim1_colors) or is_string(dim1_colors, /blank) then begin
+  if ~exist(dim1_colors) || is_string(dim1_colors, /blank) then begin
     *self.dim1_colors=replicate('',ny)
     return
   endif
@@ -1406,7 +1412,7 @@ pro xyplot::write_legend,charsize=charsize, nowrite=nowrite, legend_size=legend_
     endif
     save_psym = !p.psym
     !p.psym = 0
-    if ~(n_elements(text) eq 1 and text[0] eq '') then begin
+    if ~(n_elements(text) eq 1 && text[0] eq '') then begin
       ; if nowrite, then write label outside plot so it won't show, just to get size of legend
       if keyword_set(nowrite) then begin
         ok = execute (cmd + ', charsize=label_size, pos=[1.,1.], /left, /norm, corners=corners' )
@@ -1433,7 +1439,7 @@ function xyplot::get_sum_label, channels
   text2 = ''
 
   dim1_vals = self->get(/dim1_vals)
-  if n_elements(dim1_vals) eq 2 or size(dim1_vals, /n_dimen) eq 2 then begin
+  if n_elements(dim1_vals) eq 2 || size(dim1_vals, /n_dimen) eq 2 then begin
 
     epsilon = self.dim1_is_time ? .0015 : 0.
     ranges=find_contig_ranges(dim1_vals[*,channels], epsilon=epsilon)
@@ -1453,7 +1459,7 @@ function xyplot::dim1_widths
 
   dim1_vals = self -> get(/dim1_vals)
 
-  if (size(dim1_vals, /n_dimen) ne 2) or (data_chk(dim1_vals,/nx) ne 2) then $
+  if (size(dim1_vals, /n_dimen) ne 2) || (data_chk(dim1_vals,/nx) ne 2) then $
     return, -1 else $
     return, reform( dim1_vals[1,*] - dim1_vals[0,*])
 
@@ -1476,19 +1482,24 @@ function xyplot::where_data,data,range,count=count
   ;------------------------------------------------------------------------------
   ;-- general Y-DATA operation function (currently derivative & integral only)
 
-function xyplot::operation,xdata,ydata,err_msg=err_msg
+function xyplot::operation,xdata,ydata,edata=edata,err_msg=err_msg
 
   err_msg=''
   if self->get(/derivative) then begin
     if n_elements(ydata) lt 4 then begin
       err_msg='Need at least 3 points for derivative'
-      message,err_msg,/info
+      mprint,err_msg,/info
       return,-1
     endif
     xd2=size(xdata,/n_dim) eq 2
-    if xd2 then $
-      return,deriv(total(xdata,1)/2.,ydata) else $
+    if xd2 then begin
+      if exist(edata) then edata=derivsig(total(xdata,1)/2.,ydata,0.,edata)
+      return,deriv(total(xdata,1)/2.,ydata)
+    endif else begin
+      if exist(edata) then edata=derivsig(xdata,ydata,0.,edata)
       return,deriv(xdata,ydata)
+    endelse
+     
   endif
 
   if self->get(/integral) then begin
@@ -1559,7 +1570,7 @@ pro xyplot::check_xdata,xdata,n1,n2,type=type,err_msg=err_msg
   if type eq -1 then begin
     err_msg='Unsupported XDATA input '
     help,xdata
-    message,err_msg,/info
+    mprint,err_msg,/info
   endif
 
 
@@ -1582,9 +1593,9 @@ pro xyplot::check_ydata,ydata,n1,n2,err_msg=err_msg
     n1=sz[1] & n2=sz[2]
   endif
 
-  if (n1 eq 0) or (n2 eq 0) then begin
+  if (n1 eq 0) || (n2 eq 0) then begin
     err_msg='Unsupported YDATA input'
-    message,err_msg,/info
+    mprint,err_msg,/info
   endif
 
   return & end
@@ -1602,7 +1613,7 @@ function xyplot::where_xdata,chan,count=count,_ref_extra=extra,$
 
   xrange=self->get(/xrange)
   ylog=self->get(/ylog)
-  pos=self->get(/positive)
+   pos=self->get(/positive)
 
   ;-- flag points outside xrange
 
@@ -1615,9 +1626,9 @@ function xyplot::where_xdata,chan,count=count,_ref_extra=extra,$
 
   ;-- flag non-positive data
 
-  take_log=1-keyword_set(keep_log)
+  take_log=~keyword_set(keep_log)
   ydata=self->get_ydata(chan)
-  if (ylog and take_log) or pos then begin
+  if (ylog && take_log) || pos then begin
     bad=where( (ydata le 0.),bcount)
     if bcount gt 0 then xdata[bad]=nan
   endif
@@ -1665,7 +1676,7 @@ end
 
 function xyplot::rescale
 
-  return, (self->get(/yscale) ne 1.) or (self->get(/yoffset) ne 0.)
+  return, (self->get(/yscale) ne 1.) || (self->get(/yoffset) ne 0.)
 
 end
 
@@ -1692,7 +1703,7 @@ end
 
 function xyplot::operate
 
-  return,self->get(/derivative) or self->get(/integral)
+  return,self->get(/derivative) || self->get(/integral)
 
 end
 
@@ -1721,7 +1732,7 @@ function xyplot::get_ydata,chan,edata=edata,err_msg=err_msg
   if sum then ydata=self->get_sum_ydata() else $
     ydata=reform((*self.ydata_ptr)[*,chan])
 
-  if (self->has_edata()) and ~sum then begin
+  if (self->has_edata()) && ~sum then begin
     e2d=size(*self.edata_ptr,/n_dim) eq 2
     if e2d then edata=reform((*self.edata_ptr)[*,chan]) else edata=*self.edata_ptr
   endif
@@ -1739,8 +1750,12 @@ function xyplot::get_ydata,chan,edata=edata,err_msg=err_msg
 
   if self->operate() then begin
     xdata=self->get_xdata(chan)
-    ydata=self->operation(xdata,ydata,err_msg=err_msg)
+    ydata=self->operation(xdata,ydata,edata=edata,err_msg=err_msg)
   endif
+
+  ; -- rescale data if using SYMLOG
+
+   if self->get(/symlog) then ydata=self->symscale(ydata)
 
   return,ydata
 
@@ -1773,7 +1788,7 @@ function xyplot::get_xdata,chan,err_msg=err_msg,midpoint=midpoint, nofill=nofill
   err_msg=''
   if ~self->valid_chan(chan,err_msg=err_msg) then return,-1
   midpoint=keyword_set(midpoint)
-  fill_gaps = self -> get(/fill_gaps) and ~keyword_set(nofill)
+  fill_gaps = self -> get(/fill_gaps) && ~keyword_set(nofill)
 
   xtype=self->get(/xtype)
   case xtype of
@@ -1794,7 +1809,7 @@ function xyplot::get_xdata,chan,err_msg=err_msg,midpoint=midpoint, nofill=nofill
     end
     else: begin
       err_msg='Unrecognized XDATA type - '+strtrim(type,2)
-      message,err_msg,/info
+      mprint,err_msg,/info
     end
   endcase
   return,-1
@@ -1819,9 +1834,9 @@ function xyplot::valid_chan,chan,err_msg=err_msg
   err_msg=''
   if ~is_number(chan) then chan=0
   ny=self->get(/ny)
-  if (chan lt 0) or (chan ge ny) then begin
+  if (chan lt 0) || (chan ge ny) then begin
     err_msg='Out of range channel - '+strtrim(chan,2)
-    message,err_msg,/info
+    mprint,err_msg,/info
     return,0b
   endif
 
@@ -1836,7 +1851,7 @@ pro xyplot::plotman,plotman_obj=plotman_obj, _extra=extra
   valid_plotman = is_class(plotman_obj,'plotman', /quiet) ? plotman_obj->valid() : 0
   if valid_plotman then error=0 else plotman_obj = obj_new('plotman', error=error)
   if error then begin
-    message,'Error creating PLOTMAN widget.', /infoinue
+    mprint,'Error creating PLOTMAN widget.', /infoinue
     return
   endif
 
@@ -1845,6 +1860,43 @@ pro xyplot::plotman,plotman_obj=plotman_obj, _extra=extra
   plotman_obj -> new_panel, input=self, plot_type=plot_type, desc=desc, _extra=extra,/nodup
 
   return & end
+
+;------------------------------------------------------------------------------
+;-- Scale Y-data using SYMLOG
+
+function xyplot::symscale,y
+
+ymin=min(y)
+if ymin ge 0 then return,y
+ymax=max(y)
+z=y-ymin
+zmin=min(z)
+zmax=max(z)
+f=ymax/zmax
+z=z*ymax/zmax
+
+delta=self->get(/delta)
+if delta gt 0. then begin
+ chk=where(z lt abs(delta),count)
+ if count gt 0 then z[chk]=!values.F_NAN
+endif
+
+return,z
+
+if delta gt 0. then begin
+ chk=where( y lt delta and y gt -delta,count)
+ if count gt 0 then y[chk]=1.
+endif
+
+chk=where(y eq 0.,count)
+if count gt 0 then y[chk]=1
+
+
+chk=where(y le -delta, count)
+if count gt 0 then y[chk]=1./abs(y[chk])
+
+
+return,y & end
 
   ;------------------------------------------------------------------------------
   ;-- xyplot properties definition
@@ -1867,9 +1919,11 @@ pro xyplot__define
     nx:0l,              $     ;-- # of X points
     ny:0l,              $     ;-- # of Y channels
     plot_type:'',       $     ;-- plot type
-    yrange:[0.d,0.d],     $     ;-- data yrange
-    xrange:[0.d,0.d],     $     ;-- data xrange
+    yrange:[0.d,0.d],   $     ;-- data yrange
+    xrange:[0.d,0.d],   $     ;-- data xrange
     ylog:0b,            $     ;-- plot YAXIS as log
+    symlog:0b,          $     ;-- plot YAXIS as symlog
+    delta:0.,           $     ;-- delta for SYMLOG
     xlog:0b,            $     ;-- plot XAXIS as log
     histogram:0b,       $     ;-- plot as histogram for XTYPE=1,3
     positive:0b,        $     ;-- only plot positive data

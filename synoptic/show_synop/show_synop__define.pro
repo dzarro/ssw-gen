@@ -99,6 +99,10 @@
 ;                11-Feb-2018, Zarro (ADNET)
 ;                - save configuration state to users home directory
 ;                  instead of temp directory
+;                2-Oct-2019, Zarro (ADNET)
+;                - retired VSO prep code
+;                10-Sep-2020, Kim Tolbert. 
+;                - in rcopy, check if site needs additional files
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
@@ -108,6 +112,8 @@ function show_synop::init,verbose=verbose,no_plotman=no_plotman,$
   messenger=messenger
 
 ;-- defaults
+
+forward_function vso_prep_check
 
 if ~allow_windows(err=err) then begin
  if is_string(err) then message,err,/info
@@ -783,7 +789,7 @@ end
     xkill,tbase
     if is_string(err) then begin
      if obj_valid(data) then obj_destroy,data else $
-      err=[err,'File probably still downloading, or an invalid FITS file.']
+      err=[err,'File probably still downloading, or an invalid input file.']
      xack,err,group=info.main
      continue
     endif
@@ -1168,6 +1174,15 @@ pro show_synop::rcopy,rfiles,ofiles,count=count,err=err,cancel=cancel,$
                                                                                              
 ;-- rfiles = remote files to copy                                                                    
 ;-- ofiles = actual files copied                                                             
+
+; first see if site requires any files in addition to rfiles
+site=self->getprop(/site)
+sobj=obj_new(site)
+if obj_valid(sobj) && have_method(sobj,'add_file') then begin
+  rfiles=sobj->add_file(rfiles)
+  obj_destroy, sobj
+endif
+
 
 ofiles='' & count=0 & err=''
 down_prep=self->getprop(/down_prep)

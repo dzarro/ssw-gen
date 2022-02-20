@@ -34,6 +34,10 @@
 ;               29-May-2018, Zarro (ADNET)
 ;               - added ftp://sohoftp.nascom.nasa.gov for non-secure
 ;                 SDAC search
+;               19-Sep-2019, Zarro (ADNET)
+;               - retired FTP
+;               18-Nov-2021, Zarro (ADNET)
+;               - replaced sohoww by ssw_server()
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
@@ -41,11 +45,11 @@
 function goes_server,_ref_extra=extra, path=path,network=network,sdac=sdac,verbose=verbose
 
 verbose=keyword_set(verbose)
-sdac_servers=['ftp://sohoftp.nascom.nasa.gov','https://umbra.nascom.nasa.gov','https://hesperia.gsfc.nasa.gov']
-sdac_paths=['/sdb/goes/fits','/goes/fits','/goes']
+sdac_servers=['https://umbra.nascom.nasa.gov','https://hesperia.gsfc.nasa.gov']
+sdac_paths=['/goes/fits','/goes']
 
-yohkoh_servers=['http://www.lmsal.com','ftp://sohoftp.nascom.nasa.gov','https://sohowww.nascom.nasa.gov','https://umbra.nascom.nasa.gov']
-yohkoh_paths=['/solarsoft/sdb/ydb','/sdb/ydb','/sdb/yohkoh/ys_dbase','/sdb/yohkoh/ys_dbase']
+yohkoh_servers=['http://www.lmsal.com',ssw_server(_extra=extra),'https://umbra.nascom.nasa.gov']
+yohkoh_paths=['/solarsoft/sdb/ydb','/sdb/yohkoh/ys_dbase','/sdb/yohkoh/ys_dbase']
 
 ;-- default to Yohkoh
 

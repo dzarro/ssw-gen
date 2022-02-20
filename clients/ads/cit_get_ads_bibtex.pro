@@ -119,15 +119,11 @@ url='https://api.adsabs.harvard.edu/v1/export/'+output_format
 
 json = sock_post(url,content,headers=headers)
 
-;
-; This is in case the first post fails. I try again, and if this
-; fails then I gracefully exit.
-;
-IF json[0] EQ '' THEN BEGIN
-  help,json
+status=cit_json_check(json)
+IF status GT 0 THEN BEGIN
   json = sock_post(url,content,headers=headers)
-  IF json[0] EQ '' THEN BEGIN
-    help,json
+  status=cit_json_check(json)
+  IF status GE 1 THEN BEGIN
     print,'%CIT_GET_ADS_BIBTEX: the ADS query failed. Please try again or check your inputs. Returning...'
     return,''
   ENDIF

@@ -37,7 +37,15 @@
 ; 01-Dec-2009, Kim. Added kill_obj keyword.  If set, destroy goes obj when exit GUI.
 ; 31-Dec-2009, Kim. Get state before checking if KILL button was hit, so state.kill_obj will be available.
 ; 06-May-2016, Kim. Add GOES EUVA, EUVB, EUVE access
-;
+; 01-Jun-2020, Kim. A few changes to allow reading NOAA netcdf files. Pulldown of archive
+;   options now has ['ANY', 'NOAA', 'SDAC', 'YOHKOH', 'EUVA', 'EUVB', 'EUVE'] corresponding to
+;   arch = 0/1/2/3 for first four, and euv = 1/2/3 for 3 euv options.
+;   (sdac property is now called arch, and got rid of options for 'sdac then yohkoh' and 'yohkoh then sdac')
+;   Use prstr instead of dialog_message (which was a blocking widget) to show satellite list of times.
+; 17-Aug-2020, Kim. Meyer/Mewe option is obsolete. Desensitize that option (but leave it showing in case
+;   user set abund=2 at command line). And cleaned up setting of allowed and disallowed options (desensitize)
+;   based on type of data (xrs or euv) and model option (chianti or mewe)
+; 02-Oct-2020, Kim. Added 'Use original scaling' button
 ;-
 
 ;---------------------------------------------------------------------------
@@ -46,65 +54,66 @@
 
 pro goes::update_widget, wbase
 
-widget_control, wbase, get_uvalue=state
+  widget_control, wbase, get_uvalue=state
 
-widget_control, state.wtimes, set_value=anytim([self->get(/tstart), self->get(/tend)])
+  widget_control, state.wtimes, set_value=anytim([self->get(/tstart), self->get(/tend)])
 
-q = where (trim(goes_sat(self->getprop(/sat),/num)) eq state.sat_list, count)
-widget_control, state.wsat, set_droplist_select=(count eq 1 ? q[0] : 0)
+  q = where (trim(goes_sat(self->getprop(/sat),/num)) eq state.sat_list, count)
+  widget_control, state.wsat, set_droplist_select=(count eq 1 ? q[0] : 0)
 
-sdac = self->getprop(/sdac)
-euv = self->getprop(/euv)
-choice = euv gt 0 ? euv + 3 : sdac
-widget_control, state.warchive, set_droplist_select=choice
+  arch = self->getprop(/arch)
+  euv = self->getprop(/euv)
+  choice = euv gt 0 ? euv + 3 : arch
+  widget_control, state.warchive, set_droplist_select=choice
 
-widget_control, state.wres, set_droplist_select=self->getprop(/mode), $
-	sensitive=(sdac ne 1) and (euv eq 0)
-	
-; Lots of options will be sensitive only if EUV data is not chosen (euv=0)
-; 	
-widget_control, state.woptions_ids[1], sensitive=(euv eq 0)
-widget_control, state.woptions_ids[2], sensitive=(euv eq 0)
-widget_control, state.woptions_ids[3], sensitive=(euv eq 0)	
+  widget_control, state.wres, set_droplist_select=self->getprop(/mode), $
+    sensitive=(arch ne 2) and (euv eq 0)
 
-widget_control, state.wmodel, sensitive=(euv eq 0)
-widget_control, state.wbk_base, sensitive=(euv eq 0)
-widget_control, state.wint_base, sensitive=(euv eq 0)
+  ; Lots of options will be sensitive only if EUV data is not chosen (euv=0)
+  ;
+  widget_control, state.woptions_ids[1], sensitive=(euv eq 0)
+  widget_control, state.woptions_ids[2], sensitive=(euv eq 0)
+  widget_control, state.woptions_ids[3], sensitive=(euv eq 0)
 
-; construct array of 0s and 1s for values of plot option buttons. Don't
-; set 'Multiple' button  - leave that as user set it.
-val = [self->getprop(/clean), $
-	self->getprop(/bsub), $
-	self->getprop(/markbad), $
-	self->getprop(/showclass), $
-	state.use_plotman]
-widget_control, state.woptions, set_value=val
+  widget_control, state.wmodel, sensitive=(euv eq 0)
+  widget_control, state.wbk_base, sensitive=(euv eq 0)
+  widget_control, state.wint_base, sensitive=(euv eq 0)
 
-abund = self->getprop(/abund)
-widget_control, state.wmodel, set_value=abund
+  ; construct array of 0s and 1s for values of plot option buttons. Don't
+  ; set 'Multiple' button  - leave that as user set it.
+  val = [self->getprop(/clean), $
+    self->getprop(/bsub), $
+    self->getprop(/markbad), $
+    self->getprop(/showclass), $
+    state.use_plotman]
+  widget_control, state.woptions, set_value=val
 
-if state.allow_multiple then begin
-	widget_control, state.wdata_multi, get_value=val
-	if abund eq 2 then widget_control, state.wdata_multi, set_value=val*[1,1,1,1,0,0] ; if not using chianti, can't do energy loss
-	if euv gt 0   then widget_control, state.wdata_multi, set_value=val*[1,1,0,0,0,0] ; if euv, can't do anything but flux and deriv
-	data_ids = state.wmulti_ids
-endif else begin
-	widget_control, state.wdata_single, get_value=val
-	if val gt 2 and abund eq 2 then widget_control, state.wdata_single, set_value=0 ; if not using chianti, can't to energy loss
-	data_ids = state.wsingle_ids
-endelse
+  abund = self->getprop(/abund)
+  widget_control, state.wmodel, set_value=abund
 
-;above we turned options off that we can't use, now desensitize as well
-widget_control, data_ids[2], sensitive=(euv eq 0)
-widget_control, data_ids[3], sensitive=(euv eq 0)
-widget_control, data_ids[4], sensitive=(abund lt 2) and (euv eq 0)
-widget_control, data_ids[5], sensitive=(abund lt 2) and (euv eq 0)
+  widget_control, state.worig, set_button=self->getprop(/orig_scaling)
 
+  ; Change current selections to allowed choies, and below make disallowed options insensitive
+  if state.allow_multiple then begin
+    widget_control, state.wdata_multi, get_value=val
+    ; Can only plot flux and deriv if (xrs data and not using chianti), or if euv data
+    if abund eq 2  or euv gt 0 then widget_control, state.wdata_multi, set_value=val*[1,1,0,0,0,0]
+    data_ids = state.wmulti_ids
+  endif else begin
+    widget_control, state.wdata_single, get_value=val
+    ; If 'data to plot' is not allowed, set to 'flux' (for mewe can't plot anything except flux and deriv)
+    if val gt 1 and abund eq 2 then widget_control, state.wdata_single, set_value=0
+    data_ids = state.wsingle_ids
+  endelse
 
-;bfunc = strlowcase(strmid(self->getprop(/bfunc),0,2)
-;bfunc_list = strmid(strlowcase(strcompress(self.bfunc_list,/remove_all), 0, 2)
-q = where (self->getprop(/bfunc) eq state.bfunc_list)
-widget_control, state.wbfunc, set_droplist_select=q[0]
+  ;Above we changed options that were set to a disallowed choice, now desensitize as well
+  ; Allowed options are flux and deriv if mewe or euv.
+  for ii=2,5 do widget_control, data_ids[ii], sensitive=(abund lt 2) and (euv eq 0)
+
+  ;bfunc = strlowcase(strmid(self->getprop(/bfunc),0,2)
+  ;bfunc_list = strmid(strlowcase(strcompress(self.bfunc_list,/remove_all), 0, 2)
+  q = where (self->getprop(/bfunc) eq state.bfunc_list)
+  widget_control, state.wbfunc, set_droplist_select=q[0]
 
 
 end
@@ -113,210 +122,213 @@ end
 ;   that gets the object out of the uvalue and calls the event method
 
 pro goes_event, event
-widget_control, event.top, get_uvalue=state
-if obj_valid(state.object) then state.object->event,event
-return & end
+  widget_control, event.top, get_uvalue=state
+  if obj_valid(state.object) then state.object->event,event
+  return & end
 
-;----- Main event handler
+  ;----- Main event handler
 
 pro goes::event, event
 
-widget_control, event.top, get_uvalue=state
+  widget_control, event.top, get_uvalue=state
 
-if tag_names(event,/struc) eq 'WIDGET_KILL_REQUEST' then begin
-	msg = '     Do you really want to exit the GOES GUI?     '
+  if tag_names(event,/struc) eq 'WIDGET_KILL_REQUEST' then begin
+    msg = '     Do you really want to exit the GOES GUI?     '
     answer = xanswer (msg, /str, /suppress, default=1)
     if answer eq 'y' then goto, exit else return
-endif
+  endif
 
-widget_control, event.id, get_uvalue=uvalue
+  widget_control, event.id, get_uvalue=uvalue
 
-case uvalue of
+  case uvalue of
 
-	'times': begin
-		times = event.value
-		if valid_time_range(times) then $
-			self -> set, tstart=atime(event.value[0]), tend=atime(event.value[1])
-		end
-
-	'sat': self -> set, sat=fix(state.sat_list[event.index])
-
-	'satlist': begin
-		self -> sat_times, out=out
-		a=dialog_message(out, /info)
-		end
-
-	'archive': begin
-	   if event.index le 3 then begin
-	     self -> set, sdac=event.index
-	     self -> set, euv=0
-	   endif else self -> set, euv=event.index-3
-	   end
-
-	'res': self -> set, mode=event.index
-
-	'options': begin
-		if event.value eq 0 then self -> set, clean=event.select
-		if event.value eq 1 then self -> set, bsub=event.select
-		if event.value eq 2 then self -> set, markbad=event.select
-		if event.value eq 3 then self -> set, showclass=event.select
-		if event.value eq 4 then begin
-			state.use_plotman=event.select
-			widget_control, event.top, set_uvalue=state
-		endif
-		if event.value eq 5 then begin
-			state.allow_multiple = event.select
-			widget_control, event.top, set_uvalue=state
-			widget_control, state.wdata_multi_base, map=event.select
-			widget_control, state.wdata_single_base, map=(event.select eq 0)
-		endif
-		end
-
-	'model': if event.select then self -> set, abund=event.value
-
-	'selbk': begin
-		widget_control, state.wbase, sensitive=0
-		self -> select_background
-		widget_control, state.wbase, sensitive=1
-		end
-
-	'bfunc': self -> set, bfunc=state.bfunc_list(event.index)
-
-	'showbk': self -> show_background
-
-	'plotbk': if state.use_plotman then self -> plotman, /bk_overlay else self -> plot, /bk_overlay
-
-	'selint': begin
-		widget_control, state.wbase, sensitive=0
-		self -> select_integration_times
-		widget_control, state.wbase, sensitive=1
-		end
-
-	'showint': self -> show_integration_times
-
-	'summary': self -> help, /widget
-
-	'plot': begin
-		if state.allow_multiple then begin
-			widget_control, state.wdata_multi, get_value=plot_type
-			if total(plot_type) eq 0 then plot_type=[1,0,0,0,0,0]	; default to flux if none selected
-			num_plot = total(plot_type)
-		endif else begin
-			widget_control, state.wdata_single, get_value=val
-			plot_type = intarr(6)
-			plot_type[val] = 1
-			num_plot = 1
-		endelse
-       
-		if state.use_plotman then begin
-			; first create each plot requested (temperature, em, flux) in plotman separately,
-			; then if more than one requested, set the extras as overlays in plotman on
-			; the last one plotted.  (i.e. if request temp and em, will end up in plotman
-			; with a stacked plot - em on top, temp below, and plotman will let user zoom
-			; into the two plots in tandem.
-
-			; Can only do 4 at a time in plotman  If >4 selected, disable last ones and print message
-			; Aug 2009 - That's no longer true.  PLOTMAN can now do up to 12 overlays
-
-			nplotted = 0
-
-			if plot_type[1] then begin
-				self -> plotman, /derflux, desc=desc_derflux
-				if not exist(desc_derflux) then return
-				ov = append_arr(ov,desc_derflux)
-			endif
-			if plot_type[2] then begin
-				self -> plotman, /temp, desc=desc_temp
-				if not exist(desc_temp) then return
-				ov = append_arr(ov,desc_temp)
-			endif
-			if plot_type[3] then begin
-				self -> plotman, /emis, desc=desc_emis
-				if not exist(desc_emis) then return
-				ov = append_arr(ov,desc_emis)
-			endif
-			if plot_type[4] then begin
-				self -> plotman, /lrad, desc=desc_lrad
-				if not exist(desc_lrad) then return
-				ov = append_arr(ov, desc_lrad)
-			endif
-			if plot_type[5] then begin
-				self -> plotman, /lrad, /integrate, desc=desc_lrad
-				if not exist(desc_lrad) then return
-				ov = append_arr(ov, desc_lrad)
-			endif
-			if plot_type[0] then begin
-				self -> plotman, desc=desc_flux
-				if not exist(desc_flux) then return
-				ov = append_arr(ov,desc_flux)
-			endif
-			if num_plot gt 1 then begin
-				; now # overlays in plotman is 12, so just limit num_plot to 6, which is all the widget allows anyway.
-				num_plot = num_plot < 6
-				ov = ov[0:(num_plot-2)]
-				overlay_panel = strarr(12)
-				overlay_panel[1] = ov	;0th is reserved for self (for images) - so use 1,2,3,4,5
-				pobj = self->get_plotman()
-				pobj -> select
-				pobj -> set, overlay_panel=overlay_panel
-				pobj -> plot
-			endif
-
-		endif else begin
-			;if not using plotman, if more than one plot requested, stack in a multiplot
-			if num_plot gt 1 then !p.multi=[0,1,num_plot]
-			err = ''
-			if plot_type[0] then self -> plot, err_msg=err
-			if err eq '' and plot_type[1] then self -> plot, /derflux, err_msg=err
-			if err eq '' and plot_type[2] then self -> plot, /temp, err_msg=err
-			if err eq '' and plot_type[3] then self -> plot, /emis, err_msg=err
-			if err eq '' and plot_type[4] then self -> plot, /lrad, err_msg=err
-			if err eq '' and plot_type[5] then self -> plot, /lrad, /integrate, err_msg=err
-			!p.multi=0
-		endelse
-		end
-
-  'settimes': begin
-    newt=-1
-    if state.use_plotman then begin 
-      plotman_obj = self -> get_plotman (/nocreate, valid=valid)
-      if valid then begin
-        if plotman_obj -> valid_window(/message, /utplot) then begin
-          plotman_obj -> select  ; select so !x.crange will be correct
-          newt = plotman_obj->get(/utbase) + !x.crange
-          plotman_obj -> unselect
-        endif
-      endif else a=dialog_message('No plotman time plot available.')
-    endif
-    if newt[0] ne -1 then begin
-      newt=anytim(newt,/vms)
-      self -> set, tstart=newt[0], tend=newt[1]
-      message,'Setting tstart, tend to plot limits:' + newt[0] + '  ' + newt[1], /cont
-    endif
+    'times': begin
+      times = event.value
+      if valid_time_range(times) then $
+        self -> set, tstart=atime(event.value[0]), tend=atime(event.value[1])
     end
-      
-	'writefile':  self -> savefile
-	
-	'writetext':  self -> textfile
-	
-	'gev': begin
-	   a = self -> get_gev(count=count, /show)
-	   if count eq 0 then prstr,'No GOES events in time interval.'
-	   end
 
-	'refresh':  self -> update_widget, state.wbase
+    'sat': self -> set, sat=fix(state.sat_list[event.index])
 
-	'quit': goto, exit
+    'satlist': begin
+      self -> sat_times, out=out
+      ;		a=dialog_message(out, /info)
+      prstr, out
+    end
 
-	else:
-endcase
+    'archive': begin
+      if event.index le 3 then begin
+        self -> set, arch=event.index
+        self -> set, euv=0
+      endif else self -> set, euv=event.index-3
+    end
 
-self->update_widget, state.wbase
-return
+    'res': self -> set, mode=event.index
 
-exit:
-widget_control, event.top, /destroy
-if state.kill_obj then destroy,self
+    'options': begin
+      if event.value eq 0 then self -> set, clean=event.select
+      if event.value eq 1 then self -> set, bsub=event.select
+      if event.value eq 2 then self -> set, markbad=event.select
+      if event.value eq 3 then self -> set, showclass=event.select
+      if event.value eq 4 then begin
+        state.use_plotman=event.select
+        widget_control, event.top, set_uvalue=state
+      endif
+      if event.value eq 5 then begin
+        state.allow_multiple = event.select
+        widget_control, event.top, set_uvalue=state
+        widget_control, state.wdata_multi_base, map=event.select
+        widget_control, state.wdata_single_base, map=(event.select eq 0)
+      endif
+    end
+
+    'model': if event.select then self -> set, abund=event.value
+
+    'orig_scaling': self->set, orig_scaling=event.select
+
+    'selbk': begin
+      widget_control, state.wbase, sensitive=0
+      self -> select_background
+      widget_control, state.wbase, sensitive=1
+    end
+
+    'bfunc': self -> set, bfunc=state.bfunc_list(event.index)
+
+    'showbk': self -> show_background
+
+    'plotbk': if state.use_plotman then self -> plotman, /bk_overlay else self -> plot, /bk_overlay
+
+    'selint': begin
+      widget_control, state.wbase, sensitive=0
+      self -> select_integration_times
+      widget_control, state.wbase, sensitive=1
+    end
+
+    'showint': self -> show_integration_times
+
+    'summary': self -> help, /widget
+
+    'plot': begin
+      if state.allow_multiple then begin
+        widget_control, state.wdata_multi, get_value=plot_type
+        if total(plot_type) eq 0 then plot_type=[1,0,0,0,0,0]	; default to flux if none selected
+        num_plot = total(plot_type)
+      endif else begin
+        widget_control, state.wdata_single, get_value=val
+        plot_type = intarr(6)
+        plot_type[val] = 1
+        num_plot = 1
+      endelse
+
+      if state.use_plotman then begin
+        ; first create each plot requested (temperature, em, flux) in plotman separately,
+        ; then if more than one requested, set the extras as overlays in plotman on
+        ; the last one plotted.  (i.e. if request temp and em, will end up in plotman
+        ; with a stacked plot - em on top, temp below, and plotman will let user zoom
+        ; into the two plots in tandem.
+
+        ; Can only do 4 at a time in plotman  If >4 selected, disable last ones and print message
+        ; Aug 2009 - That's no longer true.  PLOTMAN can now do up to 12 overlays
+
+        nplotted = 0
+
+        if plot_type[1] then begin
+          self -> plotman, /derflux, desc=desc_derflux
+          if not exist(desc_derflux) then return
+          ov = append_arr(ov,desc_derflux)
+        endif
+        if plot_type[2] then begin
+          self -> plotman, /temp, desc=desc_temp
+          if not exist(desc_temp) then return
+          ov = append_arr(ov,desc_temp)
+        endif
+        if plot_type[3] then begin
+          self -> plotman, /emis, desc=desc_emis
+          if not exist(desc_emis) then return
+          ov = append_arr(ov,desc_emis)
+        endif
+        if plot_type[4] then begin
+          self -> plotman, /lrad, desc=desc_lrad
+          if not exist(desc_lrad) then return
+          ov = append_arr(ov, desc_lrad)
+        endif
+        if plot_type[5] then begin
+          self -> plotman, /lrad, /integrate, desc=desc_lrad
+          if not exist(desc_lrad) then return
+          ov = append_arr(ov, desc_lrad)
+        endif
+        if plot_type[0] then begin
+          self -> plotman, desc=desc_flux
+          if not exist(desc_flux) then return
+          ov = append_arr(ov,desc_flux)
+        endif
+        if num_plot gt 1 then begin
+          ; now # overlays in plotman is 12, so just limit num_plot to 6, which is all the widget allows anyway.
+          num_plot = num_plot < 6
+          ov = ov[0:(num_plot-2)]
+          overlay_panel = strarr(12)
+          overlay_panel[1] = ov	;0th is reserved for self (for images) - so use 1,2,3,4,5
+          pobj = self->get_plotman()
+          pobj -> select
+          pobj -> set, overlay_panel=overlay_panel
+          pobj -> plot
+        endif
+
+      endif else begin
+        ;if not using plotman, if more than one plot requested, stack in a multiplot
+        if num_plot gt 1 then !p.multi=[0,1,num_plot]
+        err = ''
+        if plot_type[0] then self -> plot, err_msg=err
+        if err eq '' and plot_type[1] then self -> plot, /derflux, err_msg=err
+        if err eq '' and plot_type[2] then self -> plot, /temp, err_msg=err
+        if err eq '' and plot_type[3] then self -> plot, /emis, err_msg=err
+        if err eq '' and plot_type[4] then self -> plot, /lrad, err_msg=err
+        if err eq '' and plot_type[5] then self -> plot, /lrad, /integrate, err_msg=err
+        !p.multi=0
+      endelse
+    end
+
+    'settimes': begin
+      newt=-1
+      if state.use_plotman then begin
+        plotman_obj = self -> get_plotman (/nocreate, valid=valid)
+        if valid then begin
+          if plotman_obj -> valid_window(/message, /utplot) then begin
+            plotman_obj -> select  ; select so !x.crange will be correct
+            newt = plotman_obj->get(/utbase) + !x.crange
+            plotman_obj -> unselect
+          endif
+        endif else a=dialog_message('No plotman time plot available.')
+      endif
+      if newt[0] ne -1 then begin
+        newt=anytim(newt,/vms)
+        self -> set, tstart=newt[0], tend=newt[1]
+        message,'Setting tstart, tend to plot limits:' + newt[0] + '  ' + newt[1], /cont
+      endif
+    end
+
+    'writefile':  self -> savefile
+
+    'writetext':  self -> textfile
+
+    'gev': begin
+      a = self -> get_gev(count=count, /show)
+      if count eq 0 then prstr,'No GOES events in time interval.'
+    end
+
+    'refresh':  self -> update_widget, state.wbase
+
+    'quit': goto, exit
+
+    else:
+  endcase
+
+  self->update_widget, state.wbase
+  return
+
+  exit:
+  widget_control, event.top, /destroy
+  if state.kill_obj then destroy,self
 
 end
 
@@ -324,125 +336,132 @@ end
 
 pro goes::gui, kill_obj=kill_obj, _extra=_extra
 
-checkvar, kill_obj, 0
+  checkvar, kill_obj, 0
 
-if keyword_set(_extra) then self->set, _extra=_extra
+  if keyword_set(_extra) then self->set, _extra=_extra
 
-use_plotman = self->have_plotman_dir()
-;if use_plotman then begin
-;	p = self->get_plotman(valid=valid)
-;	if not valid then use_plotman=0
-;endif
+  use_plotman = self->have_plotman_dir()
+  ;if use_plotman then begin
+  ;	p = self->get_plotman(valid=valid)
+  ;	if not valid then use_plotman=0
+  ;endif
 
-sat_list = trim(goes_sat(/number))
-archive_list = ['YOHKOH', 'SDAC', 'YOHKOH,SDAC', 'SDAC,YOHKOH', 'EUVA', 'EUVB', 'EUVE']
-res_list = ['Three sec', 'One min', 'Five min']
-plot_list = ['Flux', 'Flux Derivative', 'Temperature', 'Emission Measure', 'Energy Loss Rate', 'Integrated Energy Loss']
-;option_list = ['Clean', 'Subtract Background', 'Mark Bad', 'Show Class', 'Use PLOTMAN']
-option_list = ['Clean', 'Subtract Background', 'Mark Bad', 'Show GOES Class', 'Use PLOTMAN', 'Multiple']
-version = ' (Chianti ' + goes_get_chianti_version() + ')'
-model_list = ['Coronal'+version, 'Photospheric'+version, 'Meyer/Mewe (Original)']
-bfunc_list = ['0Poly', '1Poly', '2Poly', '3Poly', 'Exp']
+  sat_list = trim(goes_sat(/number))
+  archive_list = [self.ar_names, 'EUVA', 'EUVB', 'EUVE']
+  res_list = ['Hi res', 'One min', 'Five min']
+  plot_list = ['Flux', 'Flux Derivative', 'Temperature', 'Emission Measure', 'Energy Loss Rate', 'Integrated Energy Loss']
+  ;option_list = ['Clean', 'Subtract Background', 'Mark Bad', 'Show Class', 'Use PLOTMAN']
+  option_list = ['Clean', 'Subtract Background', 'Mark Bad', 'Show GOES Class', 'Use PLOTMAN', 'Multiple']
+  version = ' (Chianti ' + goes_get_chianti_version() + ')'
+  model_list = ['Coronal'+version, 'Photospheric'+version, 'Meyer/Mewe (Original)']
+  bfunc_list = ['0Poly', '1Poly', '2Poly', '3Poly', 'Exp']
 
-allow_multiple = 0
+  allow_multiple = 0
 
-wbase = widget_base (title='GOES Workbench', /column, $
-	/tlb_kill, space=3, xpad=3, ypad=3)
+  wbase = widget_base (title='GOES Workbench', /column, $
+    /tlb_kill, space=3, xpad=3, ypad=3)
 
-wdata_base = widget_base (wbase, /row, /frame)
+  wdata_base = widget_base (wbase, /row, /frame)
 
-wtimes = cw_ut_range(wdata_base, value=[0.,1.], label='', $
-	uvalue='times', /noreset, /narrow, /nextprev, /frame)
+  wtimes = cw_ut_range(wdata_base, value=[0.,1.], label='', $
+    uvalue='times', /noreset, /narrow, /nextprev, /frame)
 
-wsat_base = widget_base (wdata_base, /column, /align_center)
+  wsat_base = widget_base (wdata_base, /column, /align_center)
 
-wsat_base_row = widget_base (wsat_base, /row, space=4)
-wsat = widget_droplist (wsat_base_row, title='Satellite Preference: ', value=sat_list, uvalue='sat')
-wsatlist = widget_button (wsat_base_row, value='List', uvalue='satlist')
+  wsat_base_row = widget_base (wsat_base, /row, space=4)
+  wsat = widget_droplist (wsat_base_row, title='Satellite Preference: ', value=sat_list, uvalue='sat')
+  wsatlist = widget_button (wsat_base_row, value='List', uvalue='satlist')
 
-warchive = widget_droplist (wsat_base, title='Archive: ', value=archive_list, uvalue='archive')
+  warchive = widget_droplist (wsat_base, title='Archive: ', value=archive_list, uvalue='archive')
 
-wres = widget_droplist (wsat_base, title='Resolution: ', value=res_list, uvalue='res')
+  wres = widget_droplist (wsat_base, title='Resolution: ', value=res_list, uvalue='res')
 
-wplot_base = widget_base (wbase, /row, /frame)
+  wplot_base = widget_base (wbase, /row, /frame)
 
-w_bulletin = widget_base (wplot_base)
-wdata_multi_base = widget_base (w_bulletin, /column, map=0)
+  w_bulletin = widget_base (wplot_base)
+  wdata_multi_base = widget_base (w_bulletin, /column, map=0)
 
-wdata_multi = cw_bgroup (wdata_multi_base, plot_list, /column, /nonexclusive, $
-	label_top='Data to Plot: ', set_value=[1,0,0,0,0,0], uvalue='', ids=wmulti_ids)
+  wdata_multi = cw_bgroup (wdata_multi_base, plot_list, /column, /nonexclusive, $
+    label_top='Data to Plot: ', set_value=[1,0,0,0,0,0], uvalue='', ids=wmulti_ids)
 
-wdata_single_base = widget_base(w_bulletin, /column, map=1)
-wdata_single = cw_bgroup (wdata_single_base, plot_list, /column, /exclusive, $
-	label_top='Data to Plot: ', set_value=0, uvalue='', ids=wsingle_ids)
+  wdata_single_base = widget_base(w_bulletin, /column, map=1)
+  wdata_single = cw_bgroup (wdata_single_base, plot_list, /column, /exclusive, $
+    label_top='Data to Plot: ', set_value=0, uvalue='', ids=wsingle_ids)
 
-woptions = cw_bgroup (wplot_base, option_list, /column, /nonexclusive, $
-	label_top='Plot Options: ', uvalue='options', ids=woptions_ids)
+  woptions = cw_bgroup (wplot_base, option_list, /column, /nonexclusive, $
+    label_top='Plot Options: ', uvalue='options', ids=woptions_ids)
 
-wmodel = cw_bgroup (wplot_base, model_list, /column, /exclusive, $
-	label_top='Spectral Model:', uvalue='model')
+  wmod_base = widget_base(wplot_base, /column)
 
-wbk_base = widget_base (wbase, /row, /frame, space=6)
-tmp = widget_label (wbk_base, value='Background Options: ')
-tmp = widget_button (wbk_base, value='Select Bk Times', uvalue='selbk', /align_center)
-wbfunc = widget_droplist(wbk_base, title='Bk Function: ', value=bfunc_list, uvalue='bfunc')
-tmp = widget_button (wbk_base, value='Show Bk Times', uvalue='showbk', /align_center)
-tmp = widget_button (wbk_base, value='Plot Bk', uvalue='plotbk', /align_center)
+  wmodel = cw_bgroup (wmod_base, model_list, /column, /exclusive, $
+    label_top='Spectral Model:', uvalue='model', ids=ids)
+  widget_control, ids[2], sensitive=0 ; Make the Meyer/Mewe option insensitive
 
-wint_base = widget_base (wbase, /row, /frame, space=10)
-tmp = widget_label (wint_base, value='Energy Loss Integration: ')
-tmp = widget_button (wint_base, value='Select Integration Times', uvalue='selint')
-tmp = widget_button (wint_base, value='Show Integration Times', uvalue='showint')
+  worigbase = widget_base(wmod_base, /nonexclusive, /row, ypad=20)
+  worig = widget_button(worigbase, value='Use Original Scaling', uvalue='orig_scaling' )
 
-wbutton_base1 = widget_base (wbase, /row, /align_center, space=20)
+  wbk_base = widget_base (wbase, /row, /frame, space=6)
+  tmp = widget_label (wbk_base, value='Background Options: ')
+  tmp = widget_button (wbk_base, value='Select Bk Times', uvalue='selbk', /align_center)
+  wbfunc = widget_droplist(wbk_base, title='Bk Function: ', value=bfunc_list, uvalue='bfunc')
+  tmp = widget_button (wbk_base, value='Show Bk Times', uvalue='showbk', /align_center)
+  tmp = widget_button (wbk_base, value='Plot Bk', uvalue='plotbk', /align_center)
 
-tmp = widget_button (wbutton_base1, value='Plot', uvalue='plot')
-tmp = widget_button (wbutton_base1, value='Set times to plot limits', uvalue='settimes')
-tmp = widget_button (wbutton_base1, value='Write save file', uvalue='writefile')
-tmp = widget_button (wbutton_base1, value='Write text file', uvalue='writetext')
+  wint_base = widget_base (wbase, /row, /frame, space=10)
+  tmp = widget_label (wint_base, value='Energy Loss Integration: ')
+  tmp = widget_button (wint_base, value='Select Integration Times', uvalue='selint')
+  tmp = widget_button (wint_base, value='Show Integration Times', uvalue='showint')
 
-wbutton_base2 = widget_base (wbase, /row, /align_center, space=20)
-tmp = widget_button (wbutton_base2, value='Event List', uvalue='gev')
-tmp = widget_button (wbutton_base2, value='Summary', uvalue='summary')
-tmp = widget_button (wbutton_base2, value='Refresh', uvalue='refresh')
-tmp = widget_button (wbutton_base2, value='Quit', uvalue='quit')
+  wbutton_base1 = widget_base (wbase, /row, /align_center, space=20)
 
-state = {object: self, $
-  kill_obj: kill_obj, $
-	wbase: wbase, $
-	wtimes: wtimes, $
-	wsat: wsat, $
-	warchive: warchive, $
-	wres: wres, $
-	wdata_multi_base: wdata_multi_base, $
-	wdata_multi: wdata_multi, $
-	wmulti_ids: wmulti_ids, $
-	wdata_single_base: wdata_single_base, $
-	wdata_single: wdata_single, $
-	wsingle_ids: wsingle_ids, $
-	woptions: woptions, $
-	woptions_ids: woptions_ids, $
-	wmodel: wmodel, $
-	wbk_base: wbk_base, $
-	wint_base: wint_base, $
-	wbfunc: wbfunc, $
-	sat_list: sat_list, $
-	archive_list: archive_list, $
-	res_list: res_list, $
-	plot_list: plot_list, $
-	option_list: option_list, $
-	allow_multiple: allow_multiple, $
-	use_plotman: use_plotman, $
-	model_list: model_list, $
-	bfunc_list: bfunc_list}
+  tmp = widget_button (wbutton_base1, value='Plot', uvalue='plot')
+  tmp = widget_button (wbutton_base1, value='Set times to plot limits', uvalue='settimes')
+  tmp = widget_button (wbutton_base1, value='Write save file', uvalue='writefile')
+  tmp = widget_button (wbutton_base1, value='Write text file', uvalue='writetext')
 
-widget_control, wbase, set_uvalue=state
+  wbutton_base2 = widget_base (wbase, /row, /align_center, space=20)
+  tmp = widget_button (wbutton_base2, value='Event List', uvalue='gev')
+  tmp = widget_button (wbutton_base2, value='Summary', uvalue='summary')
+  tmp = widget_button (wbutton_base2, value='Refresh', uvalue='refresh')
+  tmp = widget_button (wbutton_base2, value='Quit', uvalue='quit')
 
-widget_control, wbase, /realize
+  state = {object: self, $
+    kill_obj: kill_obj, $
+    wbase: wbase, $
+    wtimes: wtimes, $
+    wsat: wsat, $
+    warchive: warchive, $
+    wres: wres, $
+    wdata_multi_base: wdata_multi_base, $
+    wdata_multi: wdata_multi, $
+    wmulti_ids: wmulti_ids, $
+    wdata_single_base: wdata_single_base, $
+    wdata_single: wdata_single, $
+    wsingle_ids: wsingle_ids, $
+    woptions: woptions, $
+    woptions_ids: woptions_ids, $
+    worig: worig, $
+    wmodel: wmodel, $
+    wbk_base: wbk_base, $
+    wint_base: wint_base, $
+    wbfunc: wbfunc, $
+    sat_list: sat_list, $
+    archive_list: archive_list, $
+    res_list: res_list, $
+    plot_list: plot_list, $
+    option_list: option_list, $
+    allow_multiple: allow_multiple, $
+    use_plotman: use_plotman, $
+    model_list: model_list, $
+    bfunc_list: bfunc_list}
 
-self -> update_widget, wbase
+  widget_control, wbase, set_uvalue=state
 
-xmanager, 'goes', wbase, event='goes_event', /no_block
+  widget_control, wbase, /realize
+
+  self -> update_widget, wbase
+
+  xmanager, 'goes', wbase, event='goes_event', /no_block
 
 
 end

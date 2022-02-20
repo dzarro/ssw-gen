@@ -22,7 +22,9 @@
 ;
 ; Calls       :	SUNGLOBE_PARSE_TMATRIX
 ;
-; History     :	Version 1, 4-Jan-2016, William Thompson, GSFC
+; History     :	Version 1,  4-Jan-2016, William Thompson, GSFC
+;               Version 2, 10-Apr-2019, WTT, add Connectivity Tool image
+;               Version 3, 17-Aug-2021, WTT, add FOV paint image
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -50,6 +52,20 @@ for i = sstate.nmapped-1, 0, -1 do begin
     sstate.opixmodel->add, (*sstate.pimagestates[i]).omap_alpha, /alias
     sstate.opixmodel_small->add, (*sstate.pimagestates[i]).omap_alpha, /alias
 endfor
+;
+;  Add the Magnetic Connectivity Tool image to the model.
+;
+if ptr_valid(sstate.pconnfile) then begin
+    sstate.opixmodel->add, (*sstate.pconnfile).omap_alpha, /alias
+    sstate.opixmodel_small->add, (*sstate.pconnfile).omap_alpha, /alias
+endif
+;
+;  Add the painted FOV image to the model.
+;
+if ptr_valid(sstate.pfovpaint) then begin
+    sstate.opixmodel->add, (*sstate.pfovpaint).omap_alpha, /alias
+    sstate.opixmodel_small->add, (*sstate.pfovpaint).omap_alpha, /alias
+endif
 ;
 ;  Draw the large version and read it out.
 ;

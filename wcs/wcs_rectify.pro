@@ -63,6 +63,9 @@
 ;               Version 3, 12-May-2005, William Thompson, GSFC
 ;                       Handle missing complex and dcomplex values
 ;               Version 4, 19-Aug-2008, WTT, Fix bug with negative CDELT.
+;               Version 5, 14-Feb-2020, WTT, Handle cases with negative
+;                       diagonal elements and no non-zero cross-terms.
+;                       Slightly different output size.
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -101,13 +104,14 @@ if count gt 0 then begin
     goto, handle_error
 endif
 ;
-;  Check to see if there are any non-zero cross-terms.  If not, then the WCS is
-;  already rectified.
+;  Check to see if there are any non-zero cross-terms, or negative diagonal
+;  terms.  If not, then the WCS is already rectified.
 ;
 n_axis = n_elements(wcs.naxis)
 done = 1
 if wcs.variation eq 'CD' then cc = wcs.cd else cc = wcs.pc
 for i=0,n_axis-1 do begin
+    if cc[i,i] lt 0 then done = 0
     for j=0,n_axis-1 do begin
         if (i ne j) and (cc[i,j] ne 0) then done = 0
     endfor
@@ -156,9 +160,9 @@ endfor
 ;  Calculate the minimum and maximum index for each dimension, and the
 ;  dimensions of the output array.
 ;
-imin = floor(cmin / cdelt)
-imax = ceil (cmax / cdelt)
-naxis = imax - imin + 1
+imin = cmin / cdelt
+imax = cmax / cdelt
+naxis = round(imax - imin + 1)
 ;
 ;  Determine the value to use for missing data.
 ;

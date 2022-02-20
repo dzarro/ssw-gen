@@ -350,7 +350,7 @@ CHECK_ROW:
 			AND (IDLTYPE[ICOL,ILUN] LE 6) THEN	$
 			W = WHERENAN(DATA,COUNT) ELSE COUNT = 0
                 IF NOT KEYWORD_SET(NOIEEE) THEN $
-		       SWAP_ENDIAN_INPLACE,DATA,/SWAP_IF_LITTLE
+		       SWAP_ENDIAN_INPLACE,DATA,/SWAP_IF_LITTLE 
 	END ELSE COUNT = 0
 ;
 ;  If DIMS is simply the number 1, then convert DATA either to a scalar or to a
@@ -371,7 +371,7 @@ CHECK_ROW:
                 IF BZERO NE 0 THEN DATA += BZERO
                 IF N_ELEMENTS(DIMS) NE 1 THEN BEGIN
                     DDIMS = DIMS
-                    IF (DATATYPE(DATA) EQ 'STR') AND $
+                    IF (SIZE(DATA,/TNAME) EQ 'STRING') AND $
                       (PRODUCT(DIMS) GT N_ELEMENTS(DATA)) THEN $
                         DDIMS = DIMS[1:*]
                     IF N_ELEMENTS(DDIMS) NE 1 THEN $

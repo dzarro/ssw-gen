@@ -7,6 +7,7 @@
 ;               image_dim = default is [65,65], 2d array [width, height] with the desired dimensions of the reconstructed image;
 ;               Sparseness = optional 0..1, default 0.5. Smaller values provide more details, but are prone to over-resolution. Larger values lead to reconstructions lacking details.
 ;               pixel_size = optional, default 1 or [1,1]. Can be 1d or 2d array. Pixel size in arcseconds
+;               abort_numerical_issues = optional 0/1, default 0. Controls whether the algorithm results a null-result instead of a partial result when encountering numerical issues. 
 ;               Verbose = optional 0/1, default 0. Controls whether print outputs are made.
 ;
 ; Returns     : Struct with {
@@ -31,6 +32,8 @@
 ;               - cleaned up the blocking and spacing, made image_dim a Keyword param, used default
 ;               25 Oct 2017, Richard Schwartz (GSFC)
 ;               - changed the method of sc selection from where to histogram with reverse indices
+;               07  Oct 2019, Simon Felix  (FHNW)
+;               - added optional parameter "abort_numerical_issues"
 ;
 ; Contact     : simon.felix@fhnw.ch
 ;
@@ -38,12 +41,13 @@
 ;-
 
 function VIS_CS, visibilities, $
-  image_dim = image_dim, Sparseness = Sparseness, pixel_size = pixel_size, Verbose = Verbose, internalParams = internalParams
+  image_dim = image_dim, Sparseness = Sparseness, pixel_size = pixel_size, Verbose = Verbose, abort_numerical_issues = abort_numerical_issues, internalParams = internalParams
 
   default, Sparseness, 0.5
   default, pixel_size, 1.0
   default, Verbose, 0
   default, image_dim, [65, 65]
+  default, abort_numerical_issues, 0
 
   if n_elements(pixel_size) EQ 1 THEN pixel_size = [pixel_size, pixel_size]
 
@@ -115,7 +119,7 @@ function VIS_CS, visibilities, $
 
   for iteration=0,ITER-1 do begin
 
-    uwf = vis_cs_coordinate_descent(W_arcsec, H_arcsec, dict, visibilities, totalFlux, sparseness, verbose, internalParams)
+    uwf = vis_cs_coordinate_descent(W_arcsec, H_arcsec, dict, visibilities, totalFlux, sparseness, verbose, abort_numerical_issues, internalParams)
     limit = max([1d-8, (uwf[ reverse(sort(uwf)) ])[200]])
     wordsquery = where(uwf gt limit, /NULL)
 

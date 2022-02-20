@@ -25,6 +25,7 @@
 
 function obj_methods,obj,_ref_extra=extra
 
+extra=rem_dup_keywords(extra)
 obj_dissect,obj,err=err,methods=methods,_extra=extra
 return,methods
 

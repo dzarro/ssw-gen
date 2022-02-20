@@ -2,9 +2,21 @@
 ;Name: do_goes_rhessi_plots
 ;
 ;Purpose: Run goes_rhessi_plot to make GOES plots showing RHESSI obs times for RHESSI Browser
-;  at http://sprg.ssl.berkeley.edu/~tohban/browser/. If no arguments are provided, default is 
-;  to make the most recent 11 days of plots, including the current day.
-;
+;  (http://sprg.ssl.berkeley.edu/~tohban/browser/). If no arguments are provided, default is 
+;  to make the most recent 15 days of plots, including the current day. Two types of daily 
+;  plots are created - 24 hour, and stacked 12 hour plots - and there are plots on RHESSI
+;  orbit times (midnight to midnight) (not generated after RHESSI died in Aug 2018).
+;  Unless the test keywords is set, this should be run on hesperia. The plots are written to
+;  /data/goes/ in directories 24hr_plots, 12hr_plots, and /rhessi_orbit_plots.
+;  These are normally run from a cron job by account softw on hesperia  that does the following:
+;    do_goes_rhessi_plots
+;    do_goes_rhessi_plots, /stacked
+;    do_goes_rhessi_plots, /orbit
+;  To run manually for a specific time interval, run commands like this:
+;    do_goes_rhessi_plots, time=['1-jan-2021','18-aug-2021']
+;    do_goes_rhessi_plots, time=['1-jan-2021','18-aug-2021'], /stacked
+;    and another one with /orbit if before before Aug 2018.
+;    
 ;Input Keywords:
 ;  time - if scalar, day to start making plots (makes ndays plots)
 ;     if 2-element array, time range to make plots for (ndays ignored in this case)
@@ -25,6 +37,7 @@
 ;Written: Kim Tolbert, 8-May-2012
 ;Modifications:
 ; 22-Dec-2016, Kim. Make it do 15 days, not 10
+; 20-Aug-2021, Kim. Modified header doc
 ;
 ;-
 

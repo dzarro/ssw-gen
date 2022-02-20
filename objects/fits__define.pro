@@ -232,8 +232,7 @@ function fits::format_list,index
 
 count=n_elements(index)
 if (count eq 0) || ~is_struct(index) then return,''
-
-if have_tag(index,data_obs) then time=trim(anytim2utc(index.date_obs,/vms)) else $
+if have_tag(index,'date_obs') then time=trim(anytim2utc(index.date_obs,/vms)) else $
  time=replicate('???',count)
 if have_tag(index,'wave_len') then wave=index.wave_len else $
  wave=replicate('???',count)

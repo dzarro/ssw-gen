@@ -33,6 +33,7 @@ function file2time, filearray, $
 ;       20-Jan-2003 Zarro - passed out YMD from PARSE_TIME to save 
 ;                           recalculating it later
 ;      09-May-2003, William Thompson - Use ssw_strsplit instead of strsplit
+;      04-Jun-2020, Kim Tolbert - Pass quiet to extract_fid
 ;
 ;   Restrictions:
 ;      On any given call, all input filenames should be same format
@@ -60,7 +61,7 @@ if keyword_set(parse_timex) then begin            ; let parse_time.pro do work
    return,retval                                          ; unstruct exit
 endif
 
-fidarray=extract_fid(filearray,/notime)           ; extract_fid
+fidarray=extract_fid(filearray,/notime, quiet=~verbose)           ; extract_fid
 
 nfid=n_elements(fidarray)
 lengths=strlen(fidarray)

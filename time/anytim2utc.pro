@@ -86,7 +86,8 @@
 ;
 ; Common      : None
 ;               
-; Restrictions: None
+; Restrictions: Conversions between TAI and UTC are not valid for dates prior
+;               to 1 January 1972.
 ;               
 ; Side effects: None
 ;               

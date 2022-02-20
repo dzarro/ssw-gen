@@ -27,6 +27,8 @@
 ;                - added error checks if SPEX object undefined.
 ;               Modified 19-Feb-2010, Zarro (ADNET)
 ;                - moved SPEX init to ::READ for faster startup
+;               Modified 10-Sep-2020, Kim
+;                - in read method, set err string if data structure not returned
 ;-
 ;-----------------------------------------------------------------------------
 
@@ -62,7 +64,7 @@ pro synop_spex::read,file,_ref_extra=extra,err=err
 
 if ~obj_valid(self.spex) then begin
  if ~self->have_spex_xray() then begin
-  err='SPEX READ method not available. Check if SPEX package is installed.'
+  err='SPEX READ method not available. Check if SPEX and XRAY packaged are installed.'
   message,err,/info
   return
  endif
@@ -84,6 +86,7 @@ endif else ofile=file
 if is_blank(ofile) then return
 
 data = self.spex->getdata(spex_specfile=ofile,_extra=extra)
+if ~is_struct(data) then err = 'No data accumulated. See IDL log for more information.'
 return
 end
 

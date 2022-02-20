@@ -150,7 +150,8 @@
 ;
 ; Calls       :	DATATYPE, GET_FITS_PAR, IS_STRING, WCS_FIND_SYSTEM,
 ;               BOOST_ARRAY, VALID_NUM, WCS_FIND_KEYWORD, WCS_DECOMP_ANGLE,
-;               WCS_SIMPLE, WCS_FIND_TIME, WCS_FIND_POSITION, WCS_FIND_SPECTRUM
+;               WCS_SIMPLE, WCS_FIND_TIME, WCS_FIND_POSITION,
+;               WCS_FIND_SPECTRUM, WCS_FIND_DISTORTION
 ;
 ; Common      :	None.
 ;
@@ -217,6 +218,7 @@
 ;                      array if CRVAL is present.
 ;               Version 17, 05-Dec-2016, WTT, filter out keyword=NaN lines
 ;               Version 18, 09-Mar-2017, WTT, fix bug in detecting CROTAi
+;               Version 19, 28-Jun-2019, WTT, call WCS_FIND_DISTORTION
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -865,6 +867,8 @@ wcs_find_time,     index, tags, system, wcs, column=column, $
 wcs_find_position, index, tags, system, wcs, lunfxb=lunfxb, rowfxb=rowfxb, $
   _extra=_extra
 wcs_find_spectrum, index, tags, system, wcs, column=column, $
+  lunfxb=lunfxb, rowfxb=rowfxb
+wcs_find_distortion, index, tags, system, wcs, column=column, $
   lunfxb=lunfxb, rowfxb=rowfxb
 ;
 ;  If the optional filename keyword was passed, then look for lookup table

@@ -13,12 +13,11 @@
 ;
 ; Outputs     : HEADER = response header 
 ;
-; Keywords    : CODE = response code
+; Keywords    : CODE = HTTP status code
 ;             : HOST_ONLY = only check host (not full path)
 ;             : SIZE = number of bytes in return content
 ;             : PATH = input URL is a path
 ;             : NO_ACCEPT = add "Accept: none" (for testing)
-;             : RESPONSE_CODE = code returned by IDLnetURL
 ;
 ; History     : 24-Aug-2011, Zarro (ADNET) - Written
 ;                6-Feb-2013, Zarro (ADNET)
@@ -41,6 +40,14 @@
 ;               - added RESPONSE_CODE keyword
 ;               8-Feb-2017, Zarro (ADNET)
 ;               - fixed bug with extra '/' added to path
+;               11-Nov-2018, Zarro (ADNET)
+;               - corrected false-positive debug error message
+;               15-Jan-2019, Zarro (ADNET)
+;               - removed CLOSE CONNECTION call
+;               24-Sep-2019, Zarro (ADNET)
+;               - initialized response code
+;               3-Oct-2019, Zarro (ADNET)
+;               - added call to SOCK_ERROR
 ;-
 
 function sock_head_callback, status, progress, data  
@@ -64,39 +71,23 @@ end
 
 ;-----------------------------------------------------------------------------
   
-function sock_head,url,err=err,verbose=verbose,$
-                       _ref_extra=extra,host_only=host_only,code=code,$
-                       path=path,debug=debug,size=bsize,no_accept=no_accept,$
-					   response_code=response_code
+function sock_head,url,err=err,_ref_extra=extra,host_only=host_only,code=code,$
+               path=path,debug=debug,no_accept=no_accept,response_code=response_code
+
 err='' 
+code=0L
+response_code=0l
 
-bsize=0l & code=404L
-verbose=keyword_set(verbose)
-
-case 1 of
- ~since_version('6.4') : begin
-  err='Requires IDL version 6.4 or greater.'
-  mprint,err
-  return,''
- end
- n_elements(url) ne 1: begin
-  err='Input URL must be scalar'
-  mprint,err
-  return,''
- end
-  ~is_url(url): begin
-  pr_syntax,'header=sock_head(url)'
-  return,''
- end
- else: continue=1
-endcase
+if ~is_url(url,_extra=extra,/scalar,/verbose,err=err) then return,''
 
 durl=url_fix(url,_extra=extra)
 stc=url_parse(durl)
 url_path=stc.path
-if is_blank(stc.path) || keyword_set(host_only) then begin
+
+if keyword_set(host_only) then begin
  url_path='' 
- durl=stc.scheme+'://'+stc.host+':'+stc.port
+ stc.path=''
+ durl=url_join(stc)
 endif
 
 if keyword_set(path) then if ~stregex(url_path,'\/$',/bool) then url_path=url_path+'/'
@@ -106,7 +97,7 @@ if keyword_set(path) then if ~stregex(url_path,'\/$',/bool) then url_path=url_pa
 if keyword_set(no_accept) then headers='Accept: none'
 
 ourl=obj_new('idlneturl2',durl,url_path=url_path,_extra=extra,$
-              debug=debug,headers=headers,verbose=verbose)
+              debug=debug,headers=headers)
 
 if is_string(url_path) && (url_path ne '/') then begin
  ourl->setproperty,callback_data=data,callback_function='sock_head_callback'
@@ -119,13 +110,7 @@ catch, error
 if (error ne 0) then begin
  catch,/cancel
  cerr=err_state()
- if keyword_set(debug) then begin
-  mprint,cerr
-  if obj_valid(ourl) then begin
-   ourl->getproperty,response_code=rcode
-   mprint,'Response code = '+trim(rcode)
-  endif
- endif
+ if keyword_set(debug) then mprint,cerr
  message,/reset
  goto, bail
 endif
@@ -133,20 +118,13 @@ endif
 result=oUrl->Get(/string)  
 
 bail: 
-ourl->closeconnections
-
-ourl->GetProperty,RESPONSE_HEADER=rsphdr,response_code=response_code
-
 resp=''
-if is_string(rsphdr) then begin
- sock_content,rsphdr,_extra=extra,size=bsize,code=code,resp_array=resp
-endif else begin
- if is_string(cerr) then begin
-  err=cerr
-  if verbose then mprint,err
- endif
-endelse
 
-obj_destroy,ourl
+if obj_valid(ourl) then begin
+ code=sock_code(ourl,err=err,_extra=extra,resp_array=resp,response_code=response_code)
+ if is_blank(err) then sock_error,durl,code,response_code=response_code,err=err,_extra=extra
+ obj_destroy,ourl
+endif
 
 return,resp & end  
+

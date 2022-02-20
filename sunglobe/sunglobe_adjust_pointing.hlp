@@ -1,0 +1,47 @@
+!Overview
+This widget allows the user to adjust the pointing of an
+image by fitting the limb.
+
+!Check pointing
+Draws a circle on the image to show the position of the limb
+based on the current pointing values.
+
+!Fit limb
+Activates the limb fitting section on the right side.
+
+!!Selecting limb points
+In the "Fit limb" mode, points can be selected on the image
+to use in fitting the limb.  The selected points are
+overplotted on the image, and the pixel values appear as a
+list on the right.
+
+!!Remove last point
+Removes the last selected point.
+
+!!Hold radius constant
+With this option selected, only the center position is
+fitted, and the solar radius (i.e. the plate scale) is held
+constant.  Otherwise, all three parameters describing the
+limb circle are fitted.
+
+!!Cancel
+Cancels fitting the limb.  All previously entered points are
+discarded.
+
+!!Fit points
+Fit for the position of the limb based on the selected
+points.  This fit can be either accepted, or one can
+continue with selecting points to fit.
+
+!!Use microscope
+Activate the microscope window for higher accuracy.  The
+portion of the image around the cursor is shown at full
+resolution in a smaller window.
+
+Caution: Using this option may slow down the program.
+
+!Help
+Brings up this help widget
+
+!Exit
+Exit the program, and return the selected image to SunGlobe.

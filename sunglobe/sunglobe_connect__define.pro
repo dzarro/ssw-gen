@@ -42,6 +42,8 @@
 ;
 ;               WINDSPEED  = Solar wind speed in km/s (Default=450)
 ;
+;               ADJUST     = Adjust for lag time due to solar wind speed
+;
 ;               In addition, any keywords associated with the IDLgrModel object
 ;               graphics class can also be used.
 ;
@@ -53,13 +55,15 @@
 ;               ANYTIM2TAI, UTC2TAI, DIFF_ROT, PFSS_TRACE_FIELD, BOOST_ARRAY
 ;
 ; History     :	Version 1, 05-Mar-2018, William Thompson, GSFC
+;               Version 2, 10-Apr-2019, WTT, fix pointer free bug
+;               Version 3, 25-Mar-2020, WTT, add solar wind time adjustment
 ;
 ; Contact     :	WTHOMPSON
 ;-
 ;
 function sunglobe_connect::init, sstate=sstate, nlines=nlines, $
                                  gausswidth=gausswidth, windspeed=windspeed, $
-                                 basis=basis, _extra=_extra
+                                 adjust=adjust, basis=basis, _extra=_extra
 ;
 ;  Can't initialize the object without an sstate array.
 ;
@@ -82,11 +86,13 @@ self.basis = 0                  ;Basis of observer position
 self.nlines = 50                ;Target number of field lines
 self.gausswidth = 5.0           ;Gaussian width of points on source surface
 self.windspeed = 450.0          ;Solar wind speed (km/s)
+self.adjust = 0                 ;Adjust for solar wind speed
 
 if n_elements(basis) eq 1 then self.basis = keyword_set(basis)
 if n_elements(nlines) eq 1 then self.nlines = nlines
 if n_elements(gausswidth) eq 1 then self.gausswidth = gausswidth
 if n_elements(windspeed) eq 1 then self.windspeed = windspeed
+if n_elements(adjust) eq 1 then self.adjust = adjust
 ;
 ;  Build the connection graphics based on the input properties.
 ;
@@ -99,14 +105,15 @@ end
 
 pro sunglobe_connect::setproperty, sstate=sstate, basis=basis, nlines=nlines, $
                                    gausswidth=gausswidth, windspeed=windspeed, $
-                                   recalculate=recalculate, _extra=_extra
+                                   adjust=adjust, recalculate=recalculate, $
+                                   _extra=_extra
 ;
 self->idlgrmodel::setproperty, _extra=_extra
 for i=0,self.npt-1 do ((*self.polines)[i])->setproperty, _extra=_extra
 ;
 rebuild = 0
 if datatype(sstate) eq 'STC' then begin
-    ptr_destroy, self.psstate
+    ptr_free, self.psstate
     self.psstate = ptr_new(sstate)
     rebuild = 1
 endif
@@ -126,6 +133,10 @@ if n_elements(windspeed) eq 1 then begin
     self.windspeed = windspeed
     rebuild = 1
 endif
+if n_elements(adjust) eq 1 then begin
+    self.adjust = adjust
+    rebuild = 1
+endif
 ;
 ;  The recalculate property is used to defer rebuilding a hidden connection
 ;  point until it's unhidden again.
@@ -142,7 +153,7 @@ end
 
 pro sunglobe_connect::getproperty, sstate=sstate, basis=basis, nlines=nlines, $
                                    gausswidth=gausswidth, windspeed=windspeed, $
-                                   recalculate=recalculate, $
+                                   adjust=adjust, recalculate=recalculate, $
                                    _ref_extra=_ref_extra
 ;
 ((*self.polines)[0])->getproperty, _extra=_ref_extra
@@ -154,6 +165,7 @@ basis = self.basis
 nlines = self.nlines
 gausswidth = self.gausswidth
 windspeed = self.windspeed
+adjust = self.adjust
 ;
 end
 
@@ -165,11 +177,7 @@ pro sunglobe_connect::build
 ;
 @pfss_data_block
 ;
-;  Find the nearest PFSS file, and load it into the common block.
-;
 target_date = (*self.psstate).target_date
-pfssfile = pfss_time2file(target_date, /ssw_cat, /url)
-pfss_restore, pfssfile
 errmsg = ''
 distance = 0
 ;
@@ -208,6 +216,16 @@ endif
 ;   Calculate distance from source surface in solar radii.
 ;
 distance = distance*wcs_au()/wcs_rsun() - 2.5
+vel = self.windspeed / wcs_rsun(unit='km')
+;
+;  Find the nearest PFSS file, and load it into the common block.
+;
+if self.adjust then begin
+    tai = utc2tai(target_date) - (distance/vel)
+    tdate = tai2utc(tai, /ccsds)
+end else tdate = target_date
+pfssfile = pfss_time2file(tdate, /ssw_cat, /url)
+pfss_restore, pfssfile
 ;
 ;  Account for differential rotation, and convert to radians.  Differential
 ;  rotation will be re-applied in the opposite direction further below.
@@ -220,7 +238,6 @@ lat0 = lat0 * !dtor
 ;  surface.
 ;
 rot = 2.7e-6                    ;Solar rotation rate (rad/sec)
-vel = self.windspeed / wcs_rsun(unit='km')
 lon0 = lon0 + distance * rot / vel
 ;
 ;  Set up a series of random points on the source surface.
@@ -356,6 +373,7 @@ struct = {sunglobe_connect, $
           nlines: 50, $
           gausswidth: 5.0, $
           windspeed: 450.0, $
+          adjust: 0, $
           date: '', $
           daterot: '', $
           npt: 0, $

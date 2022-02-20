@@ -16,7 +16,7 @@
 ;
 ;     A tutorial for using spec_gauss_widget is available at:
 ;
-;     http://files.pyoung.org/spec_gauss_widget_tutorial.pdf
+;     http://files.pyoung.org/docs/spec_gauss_widget_tutorial.pdf
 ;
 ; INPUTS
 ;
@@ -287,6 +287,11 @@
 ;     Ver. 19, 5-Jul-2012, Peter Young
 ;       - The default X-range is modified so that missing pixels at
 ;         the ends of the spectrum are not included.
+;
+;     Ver. 20, 31-Jan-2018, Peter Young
+;       - Updated contact e-mail address; Added button for downloading
+;         the tutorial pdf; for Macs the pdf will automatically be
+;         opened. 
 ;-
 
 
@@ -647,6 +652,24 @@ CASE 1 OF
 
     ENDCASE
   END
+
+  event.id EQ state.help_butt: BEGIN
+    pdf_file='spec_gauss_widget_tutorial.pdf'
+    pdf_url='https://pyoung.org/docs/'+pdf_file
+    sock_get,pdf_url
+    chck=file_info(pdf_file)
+    IF chck.exists THEN BEGIN
+      chck=strpos(!version.os_name,'Mac')
+      IF chck GE 0 THEN spawn,'open '+pdf_file
+   ;
+      widget_control,state.fit_info,set_val=''
+      widget_control,state.fit_info,set_val='==>> Tutorial pdf ('+pdf_file+') has been downloaded to current working directory. <<=='
+    ENDIF ELSE BEGIN
+      widget_control,state.fit_info,set_val=''
+      widget_control,state.fit_info,set_val='==>> Tutorial pdf was not found online. <<=='
+    ENDELSE 
+    
+  END 
 
   event.id EQ state.pix_choose: BEGIN
     widget_control,state.pix_base2,sens=1
@@ -1334,10 +1357,12 @@ mb_base=widget_base(base2_2,/col,sens=1)
 main_butts=CW_BGROUP(mb_base, $
                      ['ZOOM','UNZOOM','EXIT'], $
                      /row,/frame,font=bigfont)
+help_butt=cw_bgroup(mb_base,['Download tutorial'], $
+                    /row,/frame,font=bigfont)
 
 space_txt=widget_label(base2_2,value='',font=bigfont)
 email_txt=widget_label(base2_2,font=font, $
-                     value='Please report errors to pyoung@ssd5.nrl.navy.mil', $
+                     value='Please report errors to peter.r.young@nasa.gov', $
                       /align_left)
 
 spec_plot = WIDGET_DRAW(BASE2_1, $
@@ -1368,7 +1393,8 @@ state={spec_plot: spec_plot, width:width, back:back, $
        fit_info:fit_info, $
        wid_data: wid_data, data: data, sg_base:sg_base, $
        fix_back: fix_back, fix_back_max_txt: fix_back_max_txt, $
-       fix_back_min_txt: fix_back_min_txt}
+       fix_back_min_txt: fix_back_min_txt, $
+       help_butt:help_butt}
 
 WIDGET_CONTROL, sg_base, /REALIZE, set_uvalue=state
 

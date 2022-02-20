@@ -24,13 +24,7 @@ pro sock_put,file,url,err=err,_ref_extra=extra,header=header
 
 err=''
 
-if ~since_version('6.4') then begin
- err='Requires IDL version 6.4 or greater.'
- mprint,err
- return
-endif
-
-if ~is_url(url) || is_blank(file) then begin
+if ~is_url(url,/scalar,err=err,_extra=extra) || is_blank(file) then begin
  pr_syntax,'sock_put,url,file'
  return
 endif
@@ -56,6 +50,7 @@ if (error ne 0) then begin
  catch,/cancel
  err=err_state()
  mprint,err
+ message,/reset
  goto,bail
 endif
 
@@ -67,9 +62,12 @@ result = ourl->put(file, url=url_out)
 ;-- clean up
 
 bail: 
-ourl->getproperty,_extra=extra,response_header=header
-;response_code=code,response_header=header,response_filename=rfile
-obj_destroy,ourl
+
+if obj_valid(ourl) then begin
+ code=sock_code(ourl,err=err,response_code=response_code,_extra=extra,response_header=response_heade$
+ if is_blank(err) then sock_error,durl,code,response_code=response_code,err=err,_extra=extra
+ obj_destroy,ourl
+endif
 
 return 
 end  

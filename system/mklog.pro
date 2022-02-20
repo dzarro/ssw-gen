@@ -30,6 +30,8 @@
 ;                - added option to parse name=value
 ;               Modified, 29-Oct-2013, Zarro (ADNET)
 ;                - Moved LOCAL keyword to _EXTRA
+;               Modified, 26-Nov-2019, Zarro (ADNET)
+;                - fixed bug with blank input value
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
@@ -77,6 +79,7 @@ case os of
 
 endcase
 verbose=keyword_set(verbose)
-if verbose then print,'% MKLOG: '+name+' = '+chklog(tname,_extra=extra,/pre)
+pre=~is_blank(value)
+if verbose then print,'% MKLOG: '+name+' = '+chklog(tname,_extra=extra,pre=pre)
 
 return & end

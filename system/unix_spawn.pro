@@ -28,6 +28,10 @@
 ;                - removed EXECUTE
 ;               31-Jan-16, Zarro (ADNET)
 ;                - replaced AND's by &&
+;               7-Jun-2019, Zarro (ADNET) 
+;                - removed duplicate output printing
+;               8-Jun-2020, Zarro (ADNET)
+;                - test for spaces in directory names
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
@@ -49,10 +53,11 @@ out=''
 
 ;--simple case first
 
-if nowait && noshell && n_elements(cmd) eq 1 then begin
- spawn,cmd,out,err,count=count
+if ~nowait && ~noshell && n_elements(cmd) eq 1 then begin
+ if print_out then $
+ spawn,cmd,count=count,/stderr else $
+  spawn,cmd,out,err,count=count
  if is_string(err) then err=arr2str(err)
- if print_out then print,out
  return
 endif
 
@@ -61,8 +66,10 @@ endif
 
 flag=''
 if noshell then flag='-f'
-batch_file=get_temp_file('unix_spawn.csh')
-file_append,batch_file,['#!/bin/csh '+flag,cmd,'exit'], /new
+batch_file=get_temp_file('_unix_spawn.csh')
+cdir=local_name(curdir())
+cdir='"'+cdir+'"'
+file_append,batch_file,['#!/bin/csh '+flag,'cd '+cdir,cmd,'exit'], /new
 file_chmod,batch_file,/a_execute
 ncmd=batch_file
 if nowait then ncmd=batch_file+' &'
@@ -71,8 +78,10 @@ if nowait then ncmd=batch_file+' &'
 ;   is backgrounded
 
 if nowait && noshell then begin
- batch_file2=get_temp_file('unix_spawn2.csh')
- file_append,batch_file2,['#!/bin/csh '+flag,ncmd,'exit'], /new
+ batch_file2=get_temp_file('_unix_spawn2.csh')
+ tdir=file_dirname(ncmd)
+ tfile=file_basename(ncmd)
+ file_append,batch_file2,['#!/bin/csh '+flag,'cd '+tdir,tfile,'exit'], /new
  file_chmod,batch_file2,/a_execute
  ncmd=batch_file2
 endif
@@ -83,10 +92,12 @@ if keyword_set(test) then begin
  stop
 endif
 
-spawn,ncmd,out,err,noshell=noshell,count=count
+if noshell then ncmd=[ncmd]
+if print_out then $
+ spawn,ncmd,count=count,/stderr,noshell=noshell else $
+  spawn,ncmd,out,err,count=count,noshell=noshell
 
 if n_elements(out) eq 1 then out=out[0] 
-if print_out && is_string(out) then print,out
 if is_string(err) then err=arr2str(err)
 if is_string(batch_file) then file_delete,batch_file,/quiet,/allow_non
 if is_string(batch_file2) then file_delete,batch_file2,/quiet,/allow_non

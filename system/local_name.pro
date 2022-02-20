@@ -19,32 +19,16 @@
 ;               9-Feb-2004, Zarro (L-3Com/GSFC) - added /NO_EXPAND
 ;               15-Jan-2015, Zarro (ADNET) 
 ;               - added check for scalar input
+;               25-Jan-2020, Zarro (ADNET)
+;               - added calls to FIX_SLASH and CHKLOG
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
 
-function local_name,infil,no_expand=no_expand
+function local_name,infil,_extra=extra,no_expand=no_expand
 
-if n_elements(infil) eq 0 then return,''
-if ~is_string(infil) or (n_elements(infil) gt 1) then return,infil
+out=fix_slash(infil)
+if keyword_set(no_expand) then return,out
 
-blim=(byte(get_delim()))[0]
-
-temp=byte(infil)
-bslash=(byte('/'))[0]
-bbslash=(byte('\'))[0]
-chk=where( (temp eq bslash) or (temp eq bbslash),count)
-if count gt 0 then temp[chk]=blim
-
-temp=string(temp)
-if keyword_set(no_expand) then return,temp
-
-temp_new=chklog(temp,/pre)
-
-;-- do second pass to convert environment variable
-
-if temp_new[0] ne temp[0] then temp_new=local_name(temp_new,/no_expand)
-
-return,temp_new
-
+return,chklog(out,/pre,_extra=extra)
 end

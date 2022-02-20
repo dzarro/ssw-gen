@@ -21,6 +21,7 @@
 ;               Originally written 20 Sept 1999, D. Zarro, SM&A/GSFC
 ;
 ; Modifications
+; 14-Dec-2018, Kim. Didn't handle the case of just two elements in array correctly. Now just returns array.
 ;-
 
 function get_uniq_range,array,sorder,count=count
@@ -28,6 +29,7 @@ function get_uniq_range,array,sorder,count=count
 count=0
 sorder=-1
 if not exist(array) then return,-1
+if n_elements(array) eq 2 then return, array ; if just one range, that's the unique range
 if (size(array))[0] ne 2 then return, -1
 sorder=0
 if n_elements(array[0,*]) eq 1 then begin

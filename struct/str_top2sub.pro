@@ -40,6 +40,7 @@
 ;	  as well as corrected a case where it returned -1 instead of the structure
 ;	8-jan-2008, Kim.  Make it work for array of named structures - now
 ;	  there's a code in name that tells it how many times to replicate named structure.
+;	29-Jul-2020, Kim. Use get_uniq instead of uniq to get indices of top_tags (if not sorted, uniq was wrong)
 ;-
 ;
 ;------------------------------------------------------------------------------
@@ -167,7 +168,8 @@ ENDFOR
 IF n_must_parse LT n_tag THEN struct = rem_tag( top, tags[must_parse] )
 
 ; Map the nested structure tags to their top level names
-sub_stc_idx =  uniq( top_tags )
+;sub_stc_idx =  uniq( top_tags ) ; this was wrong when top_tags wasn't sorted, use get_uniq instead, Kim 29-Jul-2020 
+top_tag_uniq =  get_uniq( top_tags, sub_stc_idx )
 n_sub_stc = N_Elements( sub_stc_idx )
 
 FOR i=0, n_sub_stc-1 DO BEGIN

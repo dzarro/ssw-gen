@@ -1,0 +1,35 @@
+!Overview
+Use the toggle buttons to select a spacecraft or planet, or
+enter the name into the "Other" box.  The currently selected
+viewpoint is shown near the bottom of the widget.
+
+Select Earth for satellites in orbit around Earth, such as
+the Solar Dynamics Observatory.
+
+The "Other" box supports the selection of viewpoints beyond
+what is normally available, so long as the appropriate SPICE
+ephemerides are loaded externally to SunGlobe, e.g. through
+the CSPICE_FURNSH command.
+
+!Spacecraft
+Use the toggle buttons to select one of the supported
+spacecraft.
+
+!Planet
+Use the toggle buttons to select a planet.
+
+!Other
+Enter in the name or SPICE ID number of a solar system
+object, and press return.  If a non-numeric name cannot be
+translated into a SPICE ID code, then a warning box pops up
+asking if the user wants to continue.  No checking is done
+if a number is entered.
+
+!Exit
+Exits the widget, and returns the current selection.
+
+!Reset
+Resets the widget back to the original selection.
+
+!Help
+Brings up this help widget.

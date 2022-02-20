@@ -100,7 +100,7 @@ have_con=have_proc(class_def,out=fname)
 if ~have_con || (super && ~valid_obj) then begin
  chk=valid_class(class_name)
  if ~chk then begin
-  err='Invalid class name - '+class_name
+  err='Unknown object class name - '+class_name
   mprint,err
   return
  endif

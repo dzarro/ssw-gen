@@ -18,9 +18,9 @@
 ;               - fixed check for optional secure protocol
 ;-
 
-function is_ftp,url
+function is_ftp,url,_extra=extra
 
 if is_blank(url) then return,0b
-return,stregex(url,'ftps?://',/bool,/fold)
+return,stregex(url[0],'ftps?\:\/\/',/bool,/fold)
 
 end

@@ -92,7 +92,9 @@
 ;
 ;               MAX_ITER   = Maximum number of iterations.  Default is 1000.
 ;
-; Calls       :	VALID_WCS, PRODUCT
+;               NODISTORTION = If set, then don't apply any distortion keywords.
+;
+; Calls       :	VALID_WCS, PRODUCT, TAG_EXIST, WCS_APPLY_DISTORTION, WCS_PROJ_*
 ;
 ; Common      :	None.
 ;
@@ -117,6 +119,7 @@
 ;               Version 7, 12-Oct-2006, William Thompson, GSFC
 ;                       Added support for pixel lists.
 ;               Version 8, 28-Mar-2013, WTT, Added keywords NOWRAP, POS_LONG
+;               Version 9, 28-Jun-2019, WTT, Handle distortion keywords
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -124,10 +127,14 @@
 function wcs_get_coord, wcs, pixels, quick=quick, relative=relative, $
                         force_proj=force_proj, missing=missing, $
                         tolerance=tolerance, max_iter=max_iter, nowrap=nowrap, $
-                        pos_long=pos_long
+                        pos_long=pos_long, nodistortion=nodistortion
 on_error, 2
 ;
 if not valid_wcs(wcs) then message, 'Input not recognized as WCS structure'
+;
+;  Determine whether or not the distortion correction should be applied.
+;
+apply_dist = tag_exist(wcs,'DISTORTION') and (not keyword_set(nodistortion))
 ;
 ;  Calculate the indices for each dimension, relative to the reference pixel.
 ;
@@ -163,7 +170,7 @@ if n_elements(pixels) gt 0 then begin
             temp = pixels[i,*]
             if wcs.projection eq 'PIXEL-LIST' then temp = temp-1
         end else temp = 0
-        coord[i,*] = temp - (wcs.crpix[i] - 1)
+        coord[i,*] = temp
     endfor
     if sz[0] eq 0 then pixels = pixels[0] else $
       pixels = reform(pixels, dim, /overwrite)
@@ -176,10 +183,18 @@ end else begin
     coord = make_array(dimension=[n_axis,num_elements], /double)
     nn = 1.d0
     for i=0,n_axis-1 do begin
-        coord[i,*] = (long(index / nn) mod naxis[i]) - (wcs.crpix[i] - 1)
+        coord[i,*] = long(index / nn) mod naxis[i]
         nn = nn * naxis[i]
     endfor
 endelse
+;
+;  If applicable, then apply the prior distortion correction.
+;
+if apply_dist then wcs_apply_distortion, wcs, coord, /prior
+;
+;  Apply the CRPIX values.
+;
+for i=0,n_axis-1 do coord[i,*] = coord[i,*] - (wcs.crpix[i] - 1)
 ;
 ;  If applicable, take the coordinates from a pixel list.
 ;
@@ -189,10 +204,15 @@ if wcs.projection eq 'PIXEL-LIST' then begin
     goto, reformat
 end
 ;
-;  Calculate the intermediate (relative) coordinates.
+;  Calculate the intermediate (relative) coordinates.  Apply any subsequent
+;  distortion corrections before applying the CDELT keywords.
 ;
-if wcs.variation eq 'CD' then coord = wcs.cd # coord else begin
+if wcs.variation eq 'CD' then begin
+    coord = wcs.cd # coord
+    if apply_dist then wcs_apply_distortion, wcs, coord
+end else begin
     coord = wcs.pc # coord
+    if apply_dist then wcs_apply_distortion, wcs, coord
     for i=0,n_axis-1 do coord[i,*] = wcs.cdelt[i]*coord[i,*]
 endelse
 ;

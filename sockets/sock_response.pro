@@ -23,6 +23,8 @@
 ;               - added call to URL_FIX to support HTTPS
 ;               10-March-2017, Zarro (ADNET)
 ;               - removed check for QUERY
+;               17-Nov-2018, Zarro (ADNET)
+;               - added support for URL username/password
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
@@ -38,7 +40,8 @@ durl=url_fix(url,_extra=extra)
 stc=url_parse(durl)
 
 if keyword_set(host_only) then begin
- durl=stc.scheme+'://'+stc.host+':'+stc.port+'/'
+ stc.path='/'
+ durl=url_join(stc)
 endif
 
 query=is_string(stc.query)

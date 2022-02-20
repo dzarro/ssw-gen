@@ -33,10 +33,10 @@
 
 function goes_sat,index,number=number, since_1980=since_1980, latest=latest, euv=euv
 
-sats=['15','14','13','12','11','10','9','8','7','6','5']
+sats=['17','16','15','14','13','12','11','10','9','8','7','6','5']
 
 if keyword_set(euv) then begin
-  sats = ['15','14','13']
+  sats = ['17','16','15','14','13']
 endif else begin
   if ~keyword_set(since_1980) then sats = [sats,'3','2','1','92','91']
 endelse
@@ -44,7 +44,7 @@ endelse
 if keyword_set(latest) then sats=sats[0]
 if keyword_set(number) then gsat=fix(sats) else gsat='GOES'+sats
 nsat=n_elements(gsat)
-if is_number(index) then return, gsat(0 > index < (nsat-1)) else return,gsat
+if is_number(index) then return, gsat[0 > index < (nsat-1)] else return,gsat
 
 end
 
