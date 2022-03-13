@@ -34,17 +34,9 @@ function trace::init,_ref_extra=extra
 
 if ~self->fits::init(_extra=extra) then return,0
 
-self.decoder=-1
-;
-;-1 = not checked
-;0  = not found
-;1  = found locally
-;2  = found remotely
-
 ;-- setup environment
 
 self->setenv,_extra=extra
-void=self->have_path(_extra=extra)
 
 return,1 & end
 
@@ -71,29 +63,59 @@ file_env=local_name('$SSW/trace/setup/setup.trace_env')
 file_setenv,file_env,_extra=extra
 return & end
 
-;-------------------------------------------------------------------------
-;-- check that TRACE Databases are loaded  
+;------------------------------------------------------------------------
+;-- return reference to TRACE dbase
 
-function trace::have_dbase,err=err,verbose=verbose
+function trace::which_dbase,calibration=calibration,lookup=lookup,$
+                           dbase_name=dbase_name,dbase_err=dbase_err
+  
+if keyword_set(calibration) then begin
+ dbase_name=local_name('$tdb')
+ dbase_err='TRACE calibration directory ($SSWDB/tdb) not found. Cannot prep Level 0 file.'
+ ref=self.have_cal
+endif else begin
+ dbase_name=local_name('$SSW/trace/dbase')
+ dbase_err='TRACE lookup dbase ($SSW/trace/dbase) not found. Cannot read Level 0 file.'  
+ ref=self.have_look
+endelse
 
-err=''
-chk=is_dir(local_name('$SSW/trace/dbase')) 
-if ~chk then begin
- err='TRACE lookup dbase ($SSW/trace/dbase) not found. Cannot read file.'
- if keyword_set(verbose) then mprint,err,/info
- return,chk
-endif
-return,1b
+return,ref
 end
 
-;----------------------------------------------------------------------
-function trace::have_cal,err=err,verbose=verbose
+;-------------------------------------------------------------------------
+;-- check that TRACE Calibration Databases are loaded  
 
+function trace::have_dbase,err=err,verbose=verbose,_extra=extra
+
+verbose=keyword_set(verbose)
+ref=self->which_dbase(_extra=extra,dbase_name=dbase_name,dbase_err=dbase_err)
+
+if ref.checked then begin
+ err=ref.err
+ if verbose then mprint,err  
+ return,ref.value
+endif
+ 
 err=''
-have_cal=is_dir('$tdb')
-if ~have_cal then err='TRACE calibration directory ($SSWDB/tdb) not found. Returned data will not be prepped.'
-if keyword_set(verbose) then mprint,err,/info
-return,have_cal
+chk=file_test(dbase_name,/dir)
+if ~chk then begin
+ err=dbase_err
+ xack,err,/suppress
+ ref.err=err
+ ref.value=0
+endif else begin
+ ref.err=''
+ ref.value=1
+endelse
+
+ref.checked=1
+name=tag_names(ref,/structure_name)
+temp=obj_struct(self)
+chk=have_tag(temp,name,index,count=count)
+if count eq 1 then self.(index)=ref
+
+return,ref.value
+
 end
 
 ;-------------------------------------------------------------------------
@@ -101,38 +123,41 @@ end
 
 function trace::have_decoder,err=err,verbose=verbose,_extra=extra
 
-err=''
+;0  = not found
+;1  = found locally
+;2  = found remotely
 
-if self.decoder gt 0 then return,1b
+verbose=keyword_set(verbose)  
 
-warn='TRACE decompressor not found.'
-ferr=warn+' Cannot decompress image.'
-verbose=keyword_set(verbose)
-if self.decoder eq 0 then begin
- err=ferr
- if verbose then mprint,err
- return,0b
+if self.have_decoder.checked then begin
+ err=self.have_decoder.err
+ if verbose then mprint,err  
+ return,self.have_decoder.value
 endif
-
+ 
 ;-- look for it 
 
+err=''
 wdir=!version.OS + '_' + !version.ARCH
 if self->need_thread() then wdir=str_replace(wdir,'_64','') 
 decomp='trace_decode_idl.so'
 if os_family() eq 'Windows' then decomp='trace_decode_idl.dll'
-
 share=local_name('$SSW_TRACE/binaries/'+wdir+'/'+decomp)
-chk=file_search(share,count=count)
+chk=file_test(share)
 
 ;-- found local copy
 
-if count ne 0 then begin
- self.decoder=1 & return,1b
+if chk then begin
+ self.have_decoder.value=1
+ self.have_decoder.checked=1
+ self.have_decoder.err=''
+ return,self.have_decoder.value
 endif
 
-;-- download a copy to temporary directory
+;-- try to download a copy to temporary directory
 
-mprint,warn+' Attempting download from SSW server...',/info
+warn='TRACE decompressor not found.'
+if verbose then mprint,warn+' Attempting download from SSW server...'
 sdir=get_temp_dir()
 tdir=concat_dir(sdir,'exe')
 udir=concat_dir(tdir,wdir)
@@ -140,99 +165,220 @@ mk_dir,udir,/a_write,/a_read
 sloc=ssw_server(/full)
 sfile=sloc+'/solarsoft/trace/binaries/'+wdir+'/'+decomp
 sock_get,sfile,out_dir=udir,_extra=extra,/no_check,local=share
-chk=file_search(share,count=count)
-if count ne 0 then begin
- mprint,'Download succeeded.'
+chk=file_test(share)
+if chk then begin
+ if verbose then mprint,'Download succeeded.'
  mklog,'SSW_BINARIES_SAVE',chklog('SSW_BINARIES')
  mklog,'SSW_BINARIES_TEMP',sdir
  mklog,'SSW_BINARIES',sdir
- self.decoder=2
- return,1b
-endif else mprint,'Download failed.' 
+ self.have_decoder.value=2
+ self.have_decoder.checked=1
+ self.have_decoder.err=''
+ return,self.have_decoder.value
+endif 
 
-self.decoder=0
-err=ferr
-if keyword_set(verbose) then mprint,err,/info
+err=warn+' Cannot read Level 0 file.'
+xack,err,/suppress
+self.have_decoder.err=err
+self.have_decoder.value=0b
+self.have_decoder.checked=1b
 
-return,0b
+return,self.have_decoder.value
 
+end
+
+;-------------------------------------------------------------------------
+
+function trace::time2week,t1,t2,time_id=time_id
+
+week_id='' & time_id=''
+if ~valid_time(t1) then return,week_id
+if ~valid_time(t2) then t2=t1
+t1c=anytim2utc(t1,/ecs)
+t2c=anytim2utc(t2,/ecs)
+grid=timegrid(t1c,t2c,/hours,/string,/quiet)
+week_id=anytim2weekinfo(grid,/first)
+yymmdd=time2fid(grid,/full)
+ext=anytim2utc(grid,/ext)
+hr=string(ext.hour,'(i2.2)')+'00'
+time_id=yymmdd+'.'+hr
+return,week_id
 end
 
 ;--------------------------------------------------------------------------
 
-function trace::search,tstart,tend,_ref_extra=extra,vso=vso,err=err,$
-                       count=count,type=type,flevel=flevel,verbose=verbose
+function trace::mission_times
 
-verbose=keyword_set(verbose)
-vso=keyword_set(vso) 
-type='euv/images'
-err=''
-count=0L
-no_files='No files found.'
+tstart='16-Feb-1998 20:00:00.000'
+tend='22-Jun-2010 00:00:00.000'
+return,anytim2tai([tstart,tend])
+end
+
+;--------------------------------------------------------------------------
+
+function trace::search,tstart,tend,_ref_extra=extra,vso=vso,flevel=flevel,cat=cat
   
-if ~is_number(flevel) then flevel=1 else flevel= 0 > flevel < 1
-if keyword_set(vso) then flevel=1
+vso=keyword_set(vso)
+cat=keyword_set(cat)  
+if ~is_number(flevel) then flevel=0 else flevel= 0 > fix(flevel) < 1
 
-if flevel eq 0 then begin
- if verbose then mprint,'Searching local TRACE catalog for Level 0 files..'
- files=self->cat_search(tstart,tend,count=count,err=err)
- if (count eq 0) && verbose then mprint,no_files
- return,files
-endif
+;-- def search for Level 0 files
 
-;-- search for Level 1 files
+methods=['level0','level1','vso','cat']
+case 1 of
+ cat: method=methods[3]
+ flevel eq 1: method=methods[1] 
+ vso: method=methods[2]
+ else: method=methods[0]
+endcase
 
-if vso then source='VSO' else source='TRACE archive'
-mprint,'Searching '+source+' for Level 1 files...'
-
-if vso then files=self->vso_search(tstart,tend,_extra=extra,count=count,/recover) else $
- files=self->lmsal_search(tstart,tend,_extra=extra,count=count)
-
-if count gt 1 then type=replicate(type,count)
-if (count eq 0) && verbose then mprint,no_files
+files=call_method(method,self,tstart,tend,_extra=extra)
 
 return,files
-
 end
 
 ;-------------------------------------------------------------------------
 ;-- LMSAL search wrapper
 
-function trace::lmsal_search,tstart,tend,_ref_extra=extra,wave=wave
-server=trace_server(_extra=extra,path=path)
+function trace::level1,tstart,tend,_ref_extra=extra,wave=wave,count=count,type=type,verbose=verbose,err=err
+verbose=keyword_set(verbose)
+if verbose then mprint,'Searching for Leve1 1 files...'
+
+self->valid_times,tstart,tend,err=err
+if is_string(err) then return,''
+
+server=trace_server(_extra=extra,path=path,flevel=1)
 s=obj_new('site')
 s->setprop,rhost=server,topdir=path,/full,ext='fts',delim='/'
 if keyword_set(wave) then s->setprop,ftype='.'+trim(wave)
-files=s->search(tstart,tend,_extra=extra)
+files=s->search(tstart,tend,_extra=extra,count=count)
 obj_destroy,s
+
+type=self->ftype(count)
 return,files
 end
 
 ;------------------------------------------------------------------------
-;-- read TRACE catalog
+;-- return image type 
 
-function trace::cat_search,tstart,tend,count=count,err=err
+function trace::ftype,count
 
+type='euv/images'
+if ~is_number(count) then return,''
+if count eq 1 then return,type
+return,replicate(type,count)
+
+end
+ 
+;------------------------------------------------------------------------
+;-- return TAI times of files based on filename
+
+function trace::ftimes,files,_extra=extra
+
+if is_blank(files) then return,-1
+count=n_elements(files)
+times=parse_time(files,_extra=extra,/tai)
+if count eq 1 then times=times[0]
+
+return,times
+end
+
+;------------------------------------------------------------------------
+;-- search TRACE catalog
+
+function trace::cat,tstart,tend,count=count,err=err,type=type,times=times,verbose=verbose,_ref_extra=extra
+
+verbose=keyword_set(verbose)
+if verbose then mprint,'Searching catalog for Level 0 files...'
 count=0
-err=''  
-if is_blank(chklog('TRACE_I1_DIR')) then begin
- err='Local TRACE Level 0 archive not found.'
- mprint,err
+err=''
+return_times=arg_present(times)
+times=-1
+type=self->ftype()
+self->valid_times,tstart,tend,err=err
+if is_string(err) then return,''
+
+path=self->level0_dir()
+if is_blank(path) then begin
+ err='Local Level 0 archive not found.'
+ if verbose then mprint,err
  return,''
 endif
 
-trace_cat, tstart,tend, catalog, status=status
+trace_cat, tstart,tend, catalog, status=status,loud=verbose
 if status eq 0 then return,''
-trace_cat2data,catalog,files,-1,/filedset
+
+trace_cat2data,catalog,files,-1,/filedset,loud=verbose
 count=n_elements(files)
+type=self->ftype(count)
+if return_times then times=self->ftimes(count)
+return,files
+end
+
+;------------------------------------------------------------------------
+;-- check for local Level 0 archive
+
+function trace::level0_dir
+  
+if file_test2('$TRACE_I1_DIR',/dir) then return,chklog('$TRACE_I1_DIR') else return,''
+
+end
+
+;------------------------------------------------------------------------
+;-- validate input times
+
+pro trace::valid_times,tstart,tend,err=err,_extra=extra
+
+err=''
+if valid_time(tstart) && ~valid_time(tend) then begin
+ dstart=get_def_times(tstart,dend=dend,_extra=extra,/ecs)
+ tstart=dstart & tend=dend 
+endif else begin
+ if ~valid_time(tstart) && ~valid_time(tend) then begin
+  err='Invalid search times.'
+  mprint,err
+  return
+ endif
+endelse
+
+return & end
+;-------------------------------------------------------------------------
+;-- find  Level 0 files
+
+function trace::level0,tstart,tend,_ref_extra=extra,verbose=verbose,count=count,$
+                         times=times,type=type,err=err
+
+err=''
+verbose=keyword_set(verbose)
+if verbose then mprint,'Searching remote archive for Level 0 files...'
+return_times=arg_present(times)
+times=-1
+count=0l
+type=self->ftype()
+self->valid_times,tstart,tend,err=err
+if is_string(err) then return,''
+
+server=trace_server(flevel=0,path=path,err=err,verbose=verbose)
+if is_string(err) then return,''
+path=server+path
+
+mtimes=self->mission_times()
+dstart=anytim2tai(tstart) > min(mtimes) & dend=anytim2tai(tend) < max(mtimes)
+week_id='week'+self->time2week(dstart,dend,time_id=time_id)
+files=path+'/'+week_id+'/tri'+time_id
+count=n_elements(files)
+type=self->ftype(count)
+if return_times then times=self->ftimes(files,delim='.')  
 return,files
 end
 
 ;--------------------------------------------------------------------------
 ;-- VSO search wrapper
 
-function trace::vso_search,tstart,tend,_ref_extra=extra
-files=vso_files(tstart,tend,inst='trace',_extra=extra,window=3600.)
+function trace::vso,tstart,tend,_ref_extra=extra,type=type,count=count,verbose=verbose
+if keyword_set(verbose) then mprint,'Searching VSO...'
+files=vso_files(tstart,tend,inst='trace',_extra=extra,window=3600.,/recover_url,count=count)
+type=self->ftype(count)
 return,files
 end
 
@@ -241,18 +387,30 @@ end
 
 function trace::have_path,err=err,verbose=verbose
 
+verbose=keyword_set(verbose)
+if self.have_path.checked then begin
+ err=self.have_path.err
+ if verbose && is_string(err) then mprint,err  
+ return,self.have_path.value
+endif
+
 err=''
 if ~have_proc('read_trace') then begin
  epath=local_name('$SSW/trace/idl')
- if is_dir(epath) then ssw_path,/trace,/quiet
+ if file_test(epath,/dir) then ssw_path,/trace,/quiet
  if ~have_proc('read_trace') then begin
-  err='TRACE branch of $SSW not installed. Cannot Read nor Prep image.'
-  if keyword_set(verbose) then mprint,err,/info
-  return,0b
+  err='TRACE branch of $SSW not installed. Cannot Read nor Prep Level 0 file.'
+  self.have_path.err=err
+  xack,err,/suppress
+  self.have_path.value=0b
  endif
-endif
+endif else begin
+ self.have_path.err=''
+ self.have_path.value=1b
+endelse
 
-return,1b
+self.have_path.checked=1b
+return,self.have_path.value
 
 end
 
@@ -282,10 +440,11 @@ do_img=0b
 if exist(image_no) then do_img=is_number(image_no[0])
 do_select=~do_img && ~do_all
 do_prep=~keyword_set(no_prep)
-have_path=self->have_path(err=path_err)
-have_cal=self->have_cal(err=cal_err)
-have_decoder=self->have_decoder(err=decoder_err)
-have_dbase=self->have_dbase(err=dbase_err)
+
+;have_cal=self->have_cal(err=cal_err)
+;have_decoder=self->have_decoder(err=decoder_err)
+;have_dbase=self->have_dbase(err=dbase_err)
+;have_path=self->have_path(err=path_err)
 
 ;-- read files
 
@@ -317,19 +476,11 @@ for i=0,nfiles-1 do begin
 ;-- warn if key calibration and prep files are missing
 
  if level eq 0 then begin
-  if ~have_decoder && ~decomp then begin
-   xack,decoder_err,/suppress
-   continue
+  if ~self->have_path(err=path_err,/verbose) then continue
+  if ~decomp then begin
+   if ~self->have_decoder(err=decoder_err,/verbose) then continue
+   if ~self->have_dbase(err=dbase_err,/verbose,/lookup) then continue
   endif
-  if ~have_dbase && ~decomp then begin
-   xack,dbase_err,/suppress
-   continue
-  endif
-  if ~have_path then begin
-   xack,path_err,/suppress
-   continue
-  endif
-  if ~have_cal then xack,cal_err,/suppress
  endif
 
 ;-- select image subset?
@@ -349,7 +500,7 @@ for i=0,nfiles-1 do begin
 ;-- preselect? [def]
 
  if do_select then begin
-  self->preselect,dfile,image_no,cancel=cancel
+  self->preselect,dfile,image_no,cancel=cancel,/no_counter
   if (cancel eq 1) || (image_no[0] eq -1) then continue
  endif 
  
@@ -380,7 +531,8 @@ for i=0,nfiles-1 do begin
    continue
   endif
 
-  if have_cal && do_prep then begin
+  if do_prep then do_prep=self->have_dbase(err=dbase_err,/verbose,/calibration)
+  if do_prep then begin
    mprint,'Prepping image '+trim(img)
    trace_prep,oindex,odata,index,data,/norm,/wave2point,/float,_extra=extra,/quiet
    if ~is_struct(index) then begin
@@ -418,7 +570,7 @@ return & end
 
 pro trace::binaries,reset=reset
 
-if self.decoder ne 2 then return
+if self.have_decoder.value ne 2 then return
 
 if keyword_set(reset) then begin
  if is_string(chklog('SSW_BINARIES_SAVE')) then mklog,'SSW_BINARIES','SSW_BINARIES_SAVE'
@@ -471,7 +623,7 @@ if self->need_thread() || keyword_set(thread) then begin
   endif 
   self.thread=1b
   thread,'void=obj_new','trace',/wait
-  if self.decoder eq 2 then thread,'mklog','SSW_BINARIES',chklog('SSW_BINARIES_TEMP'),/wait
+  if self.have_decoder.value eq 2 then thread,'mklog','SSW_BINARIES',chklog('SSW_BINARIES_TEMP'),/wait
  endif
  fdir=file_dirname(dfile)
  if (fdir eq '') || (fdir eq '.') then dfile=concat_dir(curdir(),dfile)
@@ -600,6 +752,13 @@ return,1b & end
 
 pro trace__define,void                 
 
-void={trace,decoder:0,thread:0b,inherits fits, inherits prep}
+path={have_path,checked:0b,err:'',value:0b}
+
+cal=rep_struct_name(path,'have_cal')
+look=rep_struct_name(path,'have_look')  
+decoder={have_decoder,checked:0b,err:'',value:0}
+
+
+void={trace,thread:0b,have_cal:cal,have_look:look,have_decoder:decoder,have_path:path,inherits fits, inherits prep}
 
 return & end

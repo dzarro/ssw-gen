@@ -35,6 +35,8 @@
 ;                - improved error propagation via keyword inheritance
 ;                5-November-2019, Zarro (ADNET)
 ;                - added check for redirect
+;               20-February-2022, Zarro (ADNET)
+;                - removed URL_FIX call on LOCATION
 ;-
 
 function sock_check,url,_ref_extra=extra,code=code,location=location
@@ -43,7 +45,7 @@ location=''
 response=sock_head(url,_extra=extra,/scalar,code=code,location=location)
 
 if is_url(location) then begin
- location=url_fix(location,_extra=extra)
+; location=url_fix(location,_extra=extra)
  response=sock_head(location,_extra=extra,/scalar,code=code)
 endif
 scode=strtrim(code,2)

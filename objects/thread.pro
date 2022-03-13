@@ -36,7 +36,9 @@
 ;               2-Sept-2017, Zarro (ADNET)
 ;               - pass completion message in ID_THREAD
 ;               25-Feb-2019, Zarro (ADNET)
-;               - fixed bug with wrong output message when multiple threads  
+;               - fixed bug with wrong output message when multiple threads
+;               6-mar-2022, Zarro (ADNET)
+;               - fixed bug with returning inherited keyword values
 ;-
 
 ;--- call back routine to notify when thread is complete
@@ -166,7 +168,6 @@ tname=scope_varname(id_thread,level=1)
 tname=tname[0]
 if is_string(tname) then name=tname else name='Thread submitted at '+!stime
 
-
 if new_thread then input='new' else input=''
 
 ;-- if thread is waiting, return parameters to caller else return to
@@ -175,8 +176,8 @@ if new_thread then input='new' else input=''
 nscope=scope_level()
 wait=keyword_set(wait_thread)
 if wait then begin
- in_level=2L-nscope
- out_level=in_level-1L 
+ in_level=nscope-1
+ out_level=nscope-1 
 endif else begin
  in_level=1L-nscope
  out_level=1L
@@ -266,9 +267,13 @@ if (ntags gt 0) then begin
   delim=','
   if strpos(cmd,'(') eq (strlen(cmd)-1) then delim='' 
   cmd=cmd+delim+var_name+'='+var_name
-  var_input=scope_varname(scope_varfetch(var_name,/ref),level=in_level)
+  rlevel=in_level+1
+  repeat begin
+   rlevel=rlevel-1
+   var_input=scope_varname(scope_varfetch(var_name,/ref),level=rlevel)
+  endrep until ((var_input[0] ne '') || (rlevel eq 1))
   obridge->setvar,var_name,var_val
-  temp={var_name:var_name, var_input:var_input[0],in_level:in_level,out_level:out_level}
+  temp={var_name:var_name, var_input:var_input[0],in_level:in_level,out_level:rlevel}
   userdata=[userdata,temp]
  endfor
 endif

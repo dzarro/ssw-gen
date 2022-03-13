@@ -24,11 +24,13 @@
 ;               - added check for IDL_STARTUP
 ;               27-July-2017, Zarro (ADNET)
 ;               - made IDL_STARTUP more robust
+;               6-March-2022, Zarro (ADNET)
+;               - added GETPROPERTY wrapper to return OPS
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
 
-function idl_bridge::init,_ref_extra=extra,err=err,verbose=verbose
+function idl_bridge::init,_ref_extra=extra,err=err,verbose=verbose,ops=ops
 
 err=''
 if ~since_version('8.2.3') then begin
@@ -59,10 +61,16 @@ if (error ne 0) then begin
  return,1
 endif
 
-s=self->idl_idlbridge::init(_extra=extra)
+;-- allow for 32 bit
 
+if is_number(ops) then begin
+ if (ops eq 32) || (ops eq 64) then iops=ops
+endif else iops=64
 
+s=self->idl_idlbridge::init(_extra=extra,ops=iops)
 if s eq 0 then return,0
+
+self.ops=iops
 
 ;-- run SSW startup
 
@@ -89,6 +97,16 @@ endif
 return,1
 
 end
+
+;-----------------------------------------------
+
+pro idl_bridge::getproperty,ops=ops,_ref_extra=extra
+
+if is_string(extra) then self->idl_idlbridge::getproperty,_extra=extra
+if arg_present(ops) then ops=self.ops
+return
+end
+
 ;-----------------------------------------------
 
 pro idl_bridge::setvar,name,value,no_copy=no_copy,err=serr
@@ -210,6 +228,6 @@ end
 ;-----------------------------------------------
 pro idl_bridge__define
 
-temp={idl_bridge, inherits idl_idlbridge}
+temp={idl_bridge, ops:0L,inherits idl_idlbridge, inherits idl_object}
 
 return & end

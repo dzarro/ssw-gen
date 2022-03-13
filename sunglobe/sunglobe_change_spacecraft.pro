@@ -23,7 +23,7 @@
 ; History     :	Version 1, 01-Apr-2019, William Thompson, GSFC
 ;               Version 2, 10-Apr-2019, WTT, check Connection Tool image
 ;               Version 3, 11-Apr-2019, WTT, ask before removing conn. image
-;               Version 4, 13-Aug-2021, WTT, include paint controls
+;               Version 4, 24-Feb-2022, WTT, split EUI into EUV and Lya channels
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -43,23 +43,29 @@ widget_control, /hourglass
 if sstate.spacecraft eq '-144' then begin ;Solar Orbiter
     widget_control, sstate.wfovconfig[0], set_uvalue='CONFIGSPICE', $
                     set_value='Configure SPICE field-of-view'
-    widget_control, sstate.wfovconfig[1], set_uvalue='CONFIGEUI', $
-                    set_value='Configure EUI field-of-view', sensitive=1
-    widget_control, sstate.wfovconfig[2], set_uvalue='CONFIGPHI', $
+    widget_control, sstate.wfovconfig[1], set_uvalue='CONFIGEUIEUV', $
+                    set_value='Configure EUI/HRI/EUV field-of-view', sensitive=1
+    widget_control, sstate.wfovconfig[2], set_uvalue='CONFIGEUILYA', $
+                    set_value='Configure EUI/HRI/Lya field-of-view', sensitive=1
+    widget_control, sstate.wfovconfig[3], set_uvalue='CONFIGPHI', $
                     set_value='Configure PHI field-of-view', sensitive=1
 ;
     widget_control, sstate.wfovpaint[0], set_uvalue='PAINTSPICE', $
                     set_value='Paint SPICE field-of-view'
-    widget_control, sstate.wfovpaint[1], set_uvalue='PAINTEUI', $
-                    set_value='Paint EUI field-of-view', sensitive=1
-    widget_control, sstate.wfovpaint[2], set_uvalue='PAINTPHI', $
+    widget_control, sstate.wfovpaint[1], set_uvalue='PAINTEUIEUV', $
+                    set_value='Paint EUI/HRI/EUV field-of-view', sensitive=1
+    widget_control, sstate.wfovpaint[2], set_uvalue='PAINTEUILYA', $
+                    set_value='Paint EUI/HRI/Lya field-of-view', sensitive=1
+    widget_control, sstate.wfovpaint[3], set_uvalue='PAINTPHI', $
                     set_value='Paint PHI field-of-view', sensitive=1
 ;
     widget_control, sstate.wfovonoff[0], set_uvalue='SPICEFOV', $
                     set_value='SPICE field-of-view on/off'
-    widget_control, sstate.wfovonoff[1], set_uvalue='EUIFOV', $
-                    set_value='EUI field-of-view on/off', sensitive=1
-    widget_control, sstate.wfovonoff[2], set_uvalue='PHIFOV', $
+    widget_control, sstate.wfovonoff[1], set_uvalue='EUIEUVFOV', $
+                    set_value='EUI/HRI/EUV field-of-view on/off', sensitive=1
+    widget_control, sstate.wfovonoff[2], set_uvalue='EUILYAFOV', $
+                    set_value='EUI/HRI/Lya field-of-view on/off', sensitive=1
+    widget_control, sstate.wfovonoff[3], set_uvalue='PHIFOV', $
                     set_value='PHI field-of-view on/off', sensitive=1
 ;
 ;  If Solar Orbiter was selected, then hide the generic FOV.
@@ -74,7 +80,7 @@ end else begin
                     set_value='Paint field-of-view'
     widget_control, sstate.wfovonoff[0], set_uvalue='GENFOV', $
                     set_value='Field-of-view on/off'
-    for i=1,2 do begin
+    for i=1,3 do begin
         widget_control, sstate.wfovconfig[i], set_value='',set_uvalue='', $
                         sensitive=0
         widget_control, sstate.wfovpaint[i], set_value='',set_uvalue='', $
@@ -87,8 +93,10 @@ end else begin
 ;
         sstate.hidespice = 1
         sstate.ospice->setproperty, hide=sstate.hidespice
-        sstate.hideeui = 1
-        sstate.oeui->setproperty, hide=sstate.hideeui
+        sstate.hideeuieuv = 1
+        sstate.oeuieuv->setproperty, hide=sstate.hideeuieuv
+        sstate.hideeuilya = 1
+        sstate.oeuilya->setproperty, hide=sstate.hideeuilya
         sstate.hidephi = 1
         sstate.ophi->setproperty, hide=sstate.hidephi
 endelse

@@ -37,7 +37,9 @@
 ;               19-Sep-2019, Zarro (ADNET)
 ;               - retired FTP
 ;               18-Nov-2021, Zarro (ADNET)
-;               - replaced sohoww by ssw_server()
+;               - replaced sohowww by ssw_server()
+;               16-Feb-2022, Zarro (ADNET)
+;               - switched LMSAL to HTTPS.
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
@@ -48,7 +50,7 @@ verbose=keyword_set(verbose)
 sdac_servers=['https://umbra.nascom.nasa.gov','https://hesperia.gsfc.nasa.gov']
 sdac_paths=['/goes/fits','/goes']
 
-yohkoh_servers=['http://www.lmsal.com',ssw_server(_extra=extra),'https://umbra.nascom.nasa.gov']
+yohkoh_servers=['https://www.lmsal.com',ssw_server(_extra=extra),'https://umbra.nascom.nasa.gov']
 yohkoh_paths=['/solarsoft/sdb/ydb','/sdb/yohkoh/ys_dbase','/sdb/yohkoh/ys_dbase']
 
 ;-- default to Yohkoh
@@ -65,7 +67,7 @@ for i=0,n_elements(servers)-1 do begin
  server=servers[i]
  path=paths[i]
  url=server+path
- network=have_network(url,_extra=extra,verbose=verbose)
+ network=have_network(url,_extra=extra,verbose=verbose,/full_path)
  if network then break
 endfor
 

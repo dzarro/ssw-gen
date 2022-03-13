@@ -213,6 +213,12 @@ Reset all orientation, centering, zoom, and spacecraft
 pointing parameters to their original values.
 
 !Configure menu
+The commands under the "Configure" menu allow one to
+configure various graphics, depending on which spacecraft or
+planet was selected.  The offset parameters for the
+fields-of-view of the various Solar Orbiter telescopes are
+defined relative to the baseline offsets defined in
+sunglobe_get_ins_offset.pro.
 
 !!Configure orbit trace
 Brings up a widget to allow the user to control the

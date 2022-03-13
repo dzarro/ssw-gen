@@ -18,26 +18,32 @@
 ;               COUNT = # of returned files
 ;               WMIN  = minimum wavelength (if available)
 ;               RECOVER_URLS = recover missing URLs
+;               ERR = error string
 ;
 ; History     : Written 3-Jan-2008, D.M. Zarro (ADNET/GSFC)
 ;               Modified 12-Nov-2014, Zarro (ADNET)
 ;                - added support for TSTART input to be a filename
 ;               Modified 12-Feb-2016, Zarro (ADNET)
 ;                - added check for blank URL's
+;               3-Feb-2022, Zarro (ADNET)
+;                - fixed potential bug with /RECOVER
+;                - added ERR
 ;
 ; Contact     : DZARRO@SOLAR.STANFORD.EDU
 ;-
 
 function vso_files,tstart,tend,times=times,sizes=sizes,count=count,$
                     _ref_extra=extra,window=window,wmin=wmin,fids=fids,$
-                   recover_urls=recover_urls
+                   recover_urls=recover_urls,err=err
 
 return_sizes=arg_present(sizes)
 return_times=arg_present(times)
 
+count=0L
 times=-1.0d & sizes=''
 urls='' & count=0 & nearest=0b & fids=''
 failure='No records with URLs found.'
+err=''
 
 if is_blank(extra) then begin
  pr_syntax,'files=vso_files(tstart [,tend],inst=inst)'
@@ -58,32 +64,34 @@ endif else vstart=get_def_times(tstart,tend,dend=vend,_extra=extra,/vms)
 
 records=vso_search(vstart,vend,_extra=extra,/url)
 if ~have_tag(records,'url') then begin
+ err=failure
  mprint,failure & return,''
 endif
 
 ;-- try to recover missing URL's
 
-chk=where(records.url ne '',count)
-if (count eq 0) then begin
+chk=where(strtrim(records.url,2) eq '',bcount)
+
+if (bcount gt 0) then begin
  if ~keyword_set(recover_urls) then begin
-  mprint,failure & return,''
+  err=failure
+  mprint,failer & return,''
  endif
- chk=vso_get(records[0],/nodown)
- if chk.url eq '' then begin
+ rchk=vso_get(records[0],/nodown)
+ if rchk.url eq '' then begin
+  err=failuer
   mprint,failure & return,''
  endif
  mprint,'Building URls...'
- stc=url_parse(chk.url)
+ stc=url_parse(rchk.url)
  server=stc.scheme+'://'+stc.host
  dir=str_replace(stc.path,records[0].fileid,'')
- records.url=server+'/'+dir+records.fileid
- count=n_elements(records)
+ records[chk].url=server+'/'+dir+records[chk].fileid
 endif 
-
-if count lt n_elements(records) then records=records[chk]
 
 ;-- sort results and find records nearest start time
 
+count=n_elements(records)
 if count gt 1 then begin
  fids=get_uniq(records.fileid,sorder)
  records=records[sorder]
@@ -105,9 +113,6 @@ if nearest then begin
  if n_elements(wmin) eq 1 then wmin=wmin[0]
  return,urls 
 endif
-
-
-count=n_elements(urls)
 
 if return_sizes && have_sizes then begin
  sizes=strtrim(records.size,2)

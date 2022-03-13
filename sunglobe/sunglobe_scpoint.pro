@@ -23,6 +23,7 @@
 ;
 ; History     :	Version 1, 20-Jan-2016, William Thompson, GSFC
 ;               Version 2, 26-Aug-2016, WTT, rebuild generic FOV
+;               Version 3, 24-Feb-2022, WTT, split EUI into EUV and Lya channels
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -56,7 +57,8 @@ widget_control, sstate.wysc, set_value=ysc
 ;  Refresh the instrument fields-of-view.
 ;
 sstate.ospice->build
-sstate.oeui->build
+sstate.oeuieuv->build
+sstate.oeuilya->build
 sstate.ophi->build
 sstate.ogen->build
 ;

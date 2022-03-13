@@ -57,6 +57,7 @@ function struct2fitshead, hdrstr, data, comments=comments,        $
 ;                                      to CROTA2, which is the actual standard
 ;      17-Feb-2006, William Thompson - Ignore substructs, pointers, obj refs
 ;                                      (e.g. WCS_POINTER)
+;      11-Feb-2022, Lynn Hutting - add skipwords=['DATE_EAR','DATE_SUN']  ; Solar Orbiter keywords requiring underscore                                       
 ;   Calls:
 ;      fxaddpar, sxaddpar, fxhmake
 ;
@@ -97,15 +98,18 @@ ntags=n_elements(tags)
 coms=strarr(ntags)
 if n_elements(comments) eq ntags then coms=comments       ; user supplied
 
-IF keyword_set(DATEUNDERSCORE2DASH) THEN FOR j=0,ntags-1 DO BEGIN
+IF keyword_set(DATEUNDERSCORE2DASH) THEN BEGIN
+  skipwords=['DATE_EAR','DATE_SUN']  ; Solar Orbiter keywords requiring underscore  ;LCH 02/11/2022                                     
+  FOR j=0,ntags-1 DO BEGIN
 	tagj=tags[j]
 	loc=strpos(tagj,'DATE_')
-	IF loc GE 0 THEN BEGIN
+        docheck=where(skipwords eq tagj,skipcount)
+	IF loc GE 0 and skipcount le 0 THEN BEGIN
 		strput,tagj,'DATE-',loc
 		tags[j]=tagj
 	ENDIF
-ENDFOR	; nbr, 7/20/06
-	
+  ENDFOR	; nbr, 7/20/06
+ENDIF	
 for i=0,n_elements(tags)-1 do begin
    value=hdrstr.(i)
    data_type = data_chk(value,/type)

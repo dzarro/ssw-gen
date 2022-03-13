@@ -414,7 +414,10 @@ if search && ~keyword_set(no_search) then begin
   data.cats=temporary(ocats)
   data.stimes=temporary(ostimes)
   data.times=temporary(otimes)
-  if cache then self->list_cache,data,/set
+  if cache then begin
+   mprint,'Saving last search to cache...' 
+   self->list_cache,data,/set
+   endif
  endif
 endif
 

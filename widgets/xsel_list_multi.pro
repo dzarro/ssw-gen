@@ -22,6 +22,7 @@
 ;   n2_item_sel - item selected in second list widget (as index if n2_index keyword set)
 ;   group - widget id of calling widget
 ;   cancel - set to 1 if user pressed cancel button
+;   no_counter - set to inhibit including counter
 ;
 ; Output:
 ;   Function returns item selected in first list widget (as index if index keyword set).
@@ -45,6 +46,7 @@
 ;     n2_items is defined.
 ;   9-Feb-2018, Zarro (ADNET) - added optional /ALL button select option
 ;   10-Aug-2018, Zarro (ADNET) - add index counter in listing
+;   3-Mar-2022, Zarro (ADNET) - adde /NO_COUNTER
 ;-
 ;===========================================================================
 
@@ -92,7 +94,7 @@ end
 
 ;------------
 pro xsel_list_multi_listwidget, w_baserow=w_baserow, items=items, label=label, initial=initial, uvalue=uvalue,$
-                                w_list=w_list
+                                w_list=w_list,no_counter=no_counter
 
 checkvar, initial, 0
 checkvar, label, 'Select from List: '
@@ -107,7 +109,8 @@ tmp = widget_label (w_base, value=label, /align_center)
 
 ; On windows, need to define x size of widgets
 if os_family() eq 'Windows' then xsize=10+max(strlen(trim(items)))
-counter='('+trim(sindgen(n_elements(items)))+') '
+if keyword_set(no_counter) then counter='' else $
+ counter='('+trim(sindgen(n_elements(items)))+') '
 
 w_list = widget_list (w_base,  $
           /multiple, $
@@ -135,7 +138,9 @@ function xsel_list_multi, items, $
 	xoffset=xoffset, $
 	yoffset=yoffset, $
 	cancel=cancel,$
-        all=all
+        all=all,$
+        no_counter=no_counter
+                          
 
 cancel=0
 
@@ -164,7 +169,7 @@ tmp = widget_label (w_basemain, value='(Use shift and control keys to select mul
 w_baserow = widget_base(w_basemain, /row, space=10)
 
 xsel_list_multi_listwidget, w_baserow=w_baserow, items=items, $
-  label=label, initial=initial, uvalue='select',w_list=w_list
+  label=label, initial=initial, uvalue='select',w_list=w_list,no_counter=no_counter
 
 if keyword_set(n2_items) then xsel_list_multi_listwidget, w_baserow=w_baserow, $
   items=n2_items, label=n2_label, initial=n2_initial, uvalue='n2_select'

@@ -57,6 +57,7 @@
 ; History     :	Version 1, 12-Jan-2016, William Thompson, GSFC
 ;               Version 2, 05-Feb-2016, WTT, GetProperty bug fix
 ;               Version 3, 10-Apr-2019, WTT, fix pointer free bug
+;               Version 4, 10-Nov-2021, WTT, include nominal offsets to S/C
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -86,7 +87,13 @@ self.slitnum = 0                ;Slit number 0-3
 self.nsteps = 1                 ;Number of step positions
 self.stepsize = 0.0             ;Distance in arcsec between steps
 self.midpos = 0.0               ;Relative middle of raster in arcsec
-
+;
+;  Get the offset from the boresight.
+;
+sunglobe_get_ins_offset, sstate, 'SPICE', xoffset, yoffset
+self.xoffset = xoffset
+self.yoffset = yoffset
+;
 if n_elements(slitnum) eq 1 then self.slitnum = slitnum
 if n_elements(nsteps) eq 1 then self.nsteps = nsteps
 if n_elements(stepsize) eq 1 then self.stepsize = stepsize
@@ -119,8 +126,9 @@ end
 ;------------------------------------------------------------------------------
 
 pro sunglobe_spice_fov::setproperty, sstate=sstate, slitnum=slitnum, $
-                                   nsteps=nsteps, stepsize=stepsize, $
-                                   midpos=midpos, _extra=_extra
+                                     nsteps=nsteps, stepsize=stepsize, $
+                                     xoffset=xoffset, yoffset=yoffset, $
+                                     midpos=midpos, _extra=_extra
 ;
 self->idlgrmodel::setproperty, _extra=_extra
 self.onorth->setproperty, _extra=_extra
@@ -135,6 +143,8 @@ if n_elements(slitnum) eq 1 then self.slitnum = slitnum
 if n_elements(nsteps) eq 1 then self.nsteps = nsteps
 if n_elements(stepsize) eq 1 then self.stepsize = stepsize
 if n_elements(midpos) eq 1 then self.midpos = midpos
+if n_elements(xoffset) eq 1 then self.xoffset = xoffset
+if n_elements(yoffset) eq 1 then self.yoffset = yoffset
 ;
 ;  Build the field-of-view graphics based on the input properties.
 ;
@@ -145,8 +155,9 @@ end
 ;------------------------------------------------------------------------------
 
 pro sunglobe_spice_fov::getproperty, sstate=sstate, slitnum=slitnum, $
-                                   nsteps=nsteps, stepsize=stepsize, $
-                                   midpos=midpos, _ref_extra=_ref_extra
+                                     nsteps=nsteps, stepsize=stepsize, $
+                                     xoffset=xoffset, yoffset=yoffset, $
+                                     midpos=midpos, _ref_extra=_ref_extra
 ;
 self.onorth->getproperty, _extra=_ref_extra
 self.osouth->getproperty, _extra=_ref_extra
@@ -158,6 +169,8 @@ slitnum = self.slitnum
 nsteps = self.nsteps
 stepsize = self.stepsize
 midpos = self.midpos
+xoffset = self.xoffset
+yoffset = self.yoffset
 ;
 end
 
@@ -175,6 +188,8 @@ dist = eye - 1
 ;
 widget_control, (*self.psstate).wxsc, get_value=xsc
 widget_control, (*self.psstate).wysc, get_value=ysc
+xsc = xsc + self.xoffset
+ysc = ysc + self.yoffset
 dtor = !dpi / 180.d0
 asectorad = dtor / 3600.d0
 ;
@@ -236,6 +251,8 @@ struct = {sunglobe_spice_fov, $
           nsteps: 1, $
           stepsize: 0.0, $
           midpos: 0.0, $
+          xoffset: 0.0, $
+          yoffset: 0.0, $
           onorth: obj_new(), $
           oslit: obj_new(), $
           osouth: obj_new()}

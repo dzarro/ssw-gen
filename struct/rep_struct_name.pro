@@ -17,11 +17,13 @@
 ; Written     : 7 July 1995, Zarro (ARC/GSFC)
 ;
 ; Modified    : 4 Jan 2005, Zarro (L-3Com/GSFC) - vectorized
+;                9-Mar-2022, Zarro (ADNET) - cleaned-up
 ;-
 
-function rep_struct_name,struct,new_name
+function rep_struct_name,struct,new_name,err=err
 
-if (not is_struct(struct)) then begin
+err=''
+if ~is_struct(struct) then begin
  pr_syntax,'NEW_STRUCT=REP_STRUCT_NAME(STRUCT,NEW_NAME)'
  if exist(struct) then return,struct else return,-1
 endif
@@ -35,16 +37,13 @@ if cur_name eq sname then return,struct
 
 ;-- check if new name is unique
 
-status=1b
-if sname ne '' then status=chk_struct_name(sname,temp=temp)
-
-if (not status) and is_struct(temp) and (sname ne '') then begin
- if not match_struct(struct,temp,/type) then begin
-  message,'Structure type already defined: '+new_name,/cont
-  return,struct
- endif
+chk=chk_struct_name(new_name)
+if ~chk then begin
+ err='Structure name '+new_name+' already taken.
+ mprint,err
+ return,struct
 endif
-
+ 
 new_struct=create_struct(struct[0],name=sname)
 nstruct=n_elements(struct)
 if nstruct gt 1 then begin
@@ -55,4 +54,3 @@ endif
 return,new_struct
 
 end
-

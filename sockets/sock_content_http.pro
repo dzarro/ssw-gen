@@ -35,6 +35,7 @@
 ;               23-Jul-2020, Zarro (ADNET) - added optional quotes for
 ;                                            DISPOSITION
 ;                7-May-2021, Zarro (ADNET) - added REF_EXTRA
+;               20-Feb-2022, Zarro (ADNET) - applied URL_FIX to LOCATION
 ;-
 
 pro sock_content_http,response,type=type,size=bsize,date=date,$
@@ -120,7 +121,7 @@ if arg_present(location) then begin
  location=''
  redir=stregex(resp,'^Location: *([^ ]+)',/fold,/extract,/sub)
  chk=where(redir[1,*] ne '',count)
- if count gt 0 then location=strtrim(redir[1,chk[0]],2)
+ if count gt 0 then location=url_fix(strtrim(redir[1,chk[0]],2))
 endif else location=''
 
 ;-- Content Location

@@ -1,25 +1,25 @@
 ;+
 ; Project     :	ORBITER - SPICE
 ;
-; Name        :	SUNGLOBE_EUI_CONFIG_FOV
+; Name        :	SUNGLOBE_EUI_EUV_CONFIG_FOV
 ;
-; Purpose     :	Widget to configure EUI field-of-view in SUNGLOBE
+; Purpose     :	Widget to configure EUI/HRI/EUV field-of-view in SUNGLOBE
 ;
 ; Category    :	Object graphics, 3D, Planning, EUI
 ;
 ; Explanation : This routine brings up a widget to allow the user to control
-;               the parameters defining a EUI field-of-view.  The parameters
-;               consist of the size and center position (relative to the
-;               spacecraft boresight) in each dimension, in arc seconds.  At
-;               the moment there are no checks that the parameters are
+;               the parameters defining a EUI/HRI/EUV field-of-view.  The
+;               parameters consist of the size and center position (relative to
+;               the spacecraft boresight) in each dimension, in arc seconds.
+;               At the moment there are no checks that the parameters are
 ;               physically compatible with the EUI instrument.
 ;
-; Syntax      :	SUNGLOBE_EUI_CONFIG_FOV, OEUI
+; Syntax      :	SUNGLOBE_EUI_EUV_CONFIG_FOV, OEUIEUV
 ;
 ; Examples    :	See sunglobe_event.pro
 ;
-; Inputs      :	OEUI  = Graphics object containing the description of the
-;                         EUI field-of-view.
+; Inputs      :	OEUIEUV  = Graphics object containing the description of the
+;                          EUI field-of-view.
 ;
 ; Keywords    :	GROUP_LEADER = The widget ID of the group leader.
 ;
@@ -28,6 +28,7 @@
 ; Calls       :	SUNGLOBE_EUI_FOV__DEFINE
 ;
 ; History     :	Version 1, 20-Jan-2016, William Thompson, GSFC
+;               Version 2, 24-Feb-2022, WTT, split EUI into EUV and LYA channels
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -35,7 +36,7 @@
 
 ;------------------------------------------------------------------------------
 
-pro sunglobe_eui_config_fov_event, event
+pro sunglobe_eui_euv_config_fov_event, event
 ;
 ;  If the window close box has been selected, then kill the widget.
 ;
@@ -74,13 +75,13 @@ case uvalue of
 ;
     'EXIT': begin
         widget_control, sstate.wxsize, get_value=xsize
-        sstate.oeui->setproperty, xsize=xsize
+        sstate.oeuieuv->setproperty, xsize=xsize
         widget_control, sstate.wysize, get_value=ysize
-        sstate.oeui->setproperty, ysize=abs(ysize)
+        sstate.oeuieuv->setproperty, ysize=abs(ysize)
         widget_control, sstate.wxcen, get_value=xcen
-        sstate.oeui->setproperty, xcen=abs(xcen)
+        sstate.oeuieuv->setproperty, xcen=abs(xcen)
         widget_control, sstate.wycen, get_value=ycen
-        sstate.oeui->setproperty, ycen=ycen
+        sstate.oeuieuv->setproperty, ycen=ycen
 destroy:
         widget_control, event.top, /destroy
         return
@@ -94,21 +95,21 @@ end
 
 ;------------------------------------------------------------------------------
 
-pro sunglobe_eui_config_fov, oeui, group_leader=group_leader, modal=modal, $
+pro sunglobe_eui_euv_config_fov, oeuieuv, group_leader=group_leader, modal=modal, $
                              _extra=_extra
 ;
 ;  Get the current raster parameters.
 ;
-oeui->getproperty, xsize=xsize
-oeui->getproperty, ysize=ysize
-oeui->getproperty, xcen=xcen
-oeui->getproperty, ycen=ycen
+oeuieuv->getproperty, xsize=xsize
+oeuieuv->getproperty, ysize=ysize
+oeuieuv->getproperty, xcen=xcen
+oeuieuv->getproperty, ycen=ycen
 ;
 ;  Set up the top base as a column widget.
 ;
 wtopbase = widget_base(/column, group_leader=group_leader, modal=modal, $
                       _extra=_extra)
-dummy = widget_label(wtopbase, value='Configure EUI field-of-view')
+dummy = widget_label(wtopbase, value='Configure EUI/HRI/EUV field-of-view')
 ;
 wxsize = cw_field(wtopbase, title='X size (arcsec):  ', $
                   value=xsize, uvalue='XSIZE', /return_events, /floating)
@@ -134,11 +135,11 @@ sstate = {wtopbase: wtopbase, $
           wysize: wysize, $
           wxcen: wxcen, $
           wycen: wycen, $
-          oeui: oeui}
+          oeuieuv: oeuieuv}
 widget_control, wtopbase, set_uvalue=sstate, /no_copy
 ;
 ;  Start the whole thing going.
 ;
-xmanager, 'sunglobe_eui_config_fov', wtopbase
+xmanager, 'sunglobe_eui_euv_config_fov', wtopbase
 ;
 end

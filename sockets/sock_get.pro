@@ -28,6 +28,7 @@
 ;               USE_LOCAL_TIME = timestamp downloaded file to local
 ;               time
 ;               BACKGROUND = download in background thread
+;               TEMP_DIR = set to download to system TEMP directory
 ;
 ; History     : 27-Dec-2009, Zarro (ADNET) - Written
 ;                8-Oct-2010, Zarro (ADNET) - Dropped support for
@@ -123,6 +124,8 @@
 ;               - improved error messaging
 ;               13-Jan-2021, Zarro (ADNET)
 ;               - fixed bug with /PROGRESS not working for QUERY URL's
+;               3-Mar-2022, Zarro (ADNET)
+;               - added /TEMP_DIR
 ;
 ;-
 ;-----------------------------------------------------------------  
@@ -173,7 +176,7 @@ end
 pro sock_get_main,url,out_name,clobber=clobber,local_file=local_file,no_check=no_check,$
   progress=progress,err=err,status=status,cancelled=cancelled,$
   out_dir=out_dir,_ref_extra=extra,verbose=verbose,$
-  debug=debug,quiet=quiet,use_local_time=use_local_time
+  debug=debug,quiet=quiet,use_local_time=use_local_time,temp_dir=temp_dir
 
 
 err='' & status=0
@@ -208,8 +211,8 @@ if is_blank(file) && is_blank(path) then begin
 endif
 
 ;-- default copying file with same name to current directory
- 
-odir=curdir()
+
+if keyword_set(temp_dir) then odir=get_temp_dir() else odir=curdir()
 ofile=file
 if n_elements(out_name) gt 1 then begin
  err='Output filename must be scalar string.'

@@ -51,9 +51,7 @@ endif
 if obj_in then cname=obj_class(class) else cname=strtrim(class,2)
 
 if since_version('6.1') then begin
- if obj_in then $
-  struct=call_function('create_struct',name=cname) else $
-   struct=call_function('create_struct',name=cname)
+  struct=call_function('create_struct',name=cname)
 endif else begin
  expr='struct={'+cname+'}'
  s=execute(expr)

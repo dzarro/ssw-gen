@@ -111,6 +111,7 @@
 ;               Version 19, 24-Dec-2019, WTT, added Adjust Pointing option
 ;               Version 20, 21-Jan-2021, WTT, added Solar Orbiter option
 ;               Version 21, 17-Aug-2021, WTT, added FOV paint options
+;               Version 22, 24-Feb-2022, WTT, split EUI into EUV and Lya channels
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -207,13 +208,15 @@ worbitconfig = widget_button(wconfigbutton, uvalue='CONFIGORBIT', $
 ;
 ;  The FOV configuration buttons depend on which spacecraft was selected.
 ;
-wfovconfig = lonarr(3)
+wfovconfig = lonarr(4)
 if spacecraft eq '-144' then begin
     wfovconfig[0] = widget_button(wconfigbutton, uvalue='CONFIGSPICE', $
                                   value='Configure SPICE field-of-view')
-    wfovconfig[1] = widget_button(wconfigbutton, uvalue='CONFIGEUI', $
-                                  value='Configure EUI field-of-view')
-    wfovconfig[2] = widget_button(wconfigbutton, uvalue='CONFIGPHI', $
+    wfovconfig[1] = widget_button(wconfigbutton, uvalue='CONFIGEUIEUV', $
+                                  value='Configure EUI/HRI/EUV field-of-view')
+    wfovconfig[2] = widget_button(wconfigbutton, uvalue='CONFIGEUILYA', $
+                                  value='Configure EUI/HRI/Lya field-of-view')
+    wfovconfig[3] = widget_button(wconfigbutton, uvalue='CONFIGPHI', $
                                   value='Configure PHI field-of-view')
 end else begin
     wfovconfig[0] = widget_button(wconfigbutton, uvalue='CONFIGGEN', $
@@ -228,13 +231,15 @@ wpaintbutton = widget_button(barbase, value='Paint FOV')
 ;
 ;  The FOV paint buttons depend on which spacecraft was selected.
 ;
-wfovpaint = lonarr(3)
+wfovpaint = lonarr(4)
 if spacecraft eq '-144' then begin
    wfovpaint[0] = widget_button(wpaintbutton, uvalue='PAINTSPICE', $
                                 value='Paint SPICE field-of-view')
-   wfovpaint[1] = widget_button(wpaintbutton, uvalue='PAINTEUI', $
-                                value='Paint EUI field-of-view')
-   wfovpaint[2] = widget_button(wpaintbutton, uvalue='PAINTPHI', $
+   wfovpaint[1] = widget_button(wpaintbutton, uvalue='PAINTEUIEUV', $
+                                value='Paint EUI/HRI/EUV field-of-view')
+   wfovpaint[2] = widget_button(wpaintbutton, uvalue='PAINTEUILYA', $
+                                value='Paint EUI/HRI/Lya field-of-view')
+   wfovpaint[3] = widget_button(wpaintbutton, uvalue='PAINTPHI', $
                                 value='Paint PHI field-of-view')
 end else begin
    wfovpaint[0] = widget_button(wpaintbutton, uvalue='PAINTGEN', $
@@ -265,13 +270,15 @@ wnar = widget_button(woptionbutton, value='Active region IDs on/off', $
 ;
 ;  The FOV on/off buttons depend on which spacecraft was selected.
 ;
-wfovonoff = lonarr(3)
+wfovonoff = lonarr(4)
 if spacecraft eq '-144' then begin
     wfovonoff[0] = widget_button(woptionbutton, uvalue='SPICEFOV', $
                                  value='SPICE field-of-view on/off')
-    wfovonoff[1] = widget_button(woptionbutton, uvalue='EUIFOV', $
-                                 value='EUI field-of-view on/off')
-    wfovonoff[2] = widget_button(woptionbutton, uvalue='PHIFOV', $
+    wfovonoff[1] = widget_button(woptionbutton, uvalue='EUIEUVFOV', $
+                                 value='EUI/HRI/EUV field-of-view on/off')
+    wfovonoff[2] = widget_button(woptionbutton, uvalue='EUILYAFOV', $
+                                 value='EUI/HRI/Lya field-of-view on/off')
+    wfovonoff[3] = widget_button(woptionbutton, uvalue='PHIFOV', $
                                  value='PHI field-of-view on/off')
 end else begin
     wfovonoff[0] = widget_button(woptionbutton, uvalue='GENFOV', $
@@ -466,7 +473,8 @@ sstate={waddhv: waddhv, $                               ;Widget IDs
         opixview_small: sobject.opixview_small, $
         obore: sobject.obore, $
         ospice: obj_new(), $
-        oeui: obj_new(), $
+        oeuieuv: obj_new(), $
+        oeuilya: obj_new(), $
         ophi: obj_new(), $
         ogen: obj_new(), $
         opfss: obj_new(), $
@@ -491,7 +499,8 @@ sstate={waddhv: waddhv, $                               ;Widget IDs
         hideconnfile: 0, $                        ;Connection file image on/off
         hidebore: 1, $                            ;Boresight on/off
         hidespice: 1, $                           ;SPICE FOV on/off
-        hideeui: 1, $                             ;EUI FOV on/off
+        hideeuieuv: 1, $                          ;EUI/HRI/EUV FOV on/off
+        hideeuilya: 1, $                          ;EUI/HRI/Lya FOV on/off
         hidephi: 1, $                             ;PHI FOV on/off
         hidegen: 1, $                             ;Generic FOV on/off
         hidefovpaint: 1, $                        ;FOV paint on/off
@@ -508,17 +517,22 @@ sstate.ospice = obj_new('sunglobe_spice_fov', sstate=sstate, /hide, $
 sstate.omodeltranslate->add, sstate.ospice
 sstate.ocontainer->add, sstate.ospice
 ;
-;  Create the EUI field-of-view object.
+;  Create the EUI field-of-view objects.
 ;
-sstate.oeui = obj_new('sunglobe_eui_fov', sstate=sstate, /hide, $
-                      linestyle=2, _extra=_extra)
-sstate.omodeltranslate->add, sstate.oeui
-sstate.ocontainer->add, sstate.oeui
+sstate.oeuieuv = obj_new('sunglobe_eui_euv_fov', sstate=sstate, /hide, $
+                         linestyle=2, _extra=_extra)
+sstate.omodeltranslate->add, sstate.oeuieuv
+sstate.ocontainer->add, sstate.oeuieuv
+;
+sstate.oeuilya = obj_new('sunglobe_eui_lya_fov', sstate=sstate, /hide, $
+                         linestyle=3, _extra=_extra)
+sstate.omodeltranslate->add, sstate.oeuilya
+sstate.ocontainer->add, sstate.oeuilya
 ;
 ;  Create the PHI field-of-view object.
 ;
 sstate.ophi = obj_new('sunglobe_phi_fov', sstate=sstate, /hide, $
-                      linestyle=3, _extra=_extra)
+                      linestyle=4, _extra=_extra)
 sstate.omodeltranslate->add, sstate.ophi
 sstate.ocontainer->add, sstate.ophi
 ;

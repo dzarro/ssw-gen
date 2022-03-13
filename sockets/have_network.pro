@@ -21,6 +21,8 @@
 ;               USE_NETWORK = set to use IDL network object (def)
 ;               RESPONSE_CODE = IDL network object response code
 ;               CODE = HTTP status code
+;               FULL_PATH = check full URL path if included (def is
+;               not to)
 ;                   
 ; History     : 8 Mar 2002, Zarro (L-3Com/GSFC)
 ;               22 Apr 2005, Zarro (L-3Com/GSFC) - return error mprint
@@ -60,13 +62,15 @@
 ;               - improved error propagation via keyword inheritance
 ;               27-November-2019, Zarro (ADNET)
 ;               - added LOCATION keyword
+;               15-February-2022, Zarro (ADNET)
+;               - added FULL_PATH
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-    
 
 function have_network,url,verbose=verbose,err=err,_ref_extra=extra,$
          interval=interval,reset=reset,code=code,$
-         response_code=response_code,location=location
+         response_code=response_code,location=location,full_path=full_path
 
 common have_network,urls
 
@@ -77,13 +81,15 @@ verbose=keyword_set(verbose)
 if reset then delvarx,urls
 if is_string(url) then test_url=strtrim(url,2) else test_url='www.google.com'
 
+full_path=keyword_set(full_path)
 test_url=url_fix(test_url,_extra=extra)
 purl=url_parse(test_url)
 test_host=purl.host
 test_port=purl.port
+test_path=purl.path
 test_scheme=purl.scheme
 test_url=test_scheme+'://'+test_host+':'+test_port
-
+if full_path && is_string(test_path) then test_url=test_url+'/'+test_path
 if ~is_number(interval) then interval=30.
 now=systime(/seconds)
 

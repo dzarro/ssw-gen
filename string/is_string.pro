@@ -13,26 +13,29 @@
 ;                              
 ; Outputs     : 0/1 if blank/nonblank
 ;
-; Keywords    : return true (1), even if string is blank
+; Keywords    : BLANK - return true, even if string is blank
+;               SCALAR - return false if not scalar string
 ;               
 ; Opt. Outputs: NONBLANK = noblank copies of input
 ;               (if input is array, then nonblanks are filtered out)
 ;             
 ; History     : 17-Nov-1999, Zarro (SM&A/GSFC)
 ;                5-Feb-2003, Zarro (EER/GSFC) - added /BLANK
+;               22-Feb-2022, Zarro (ADNET/GSFC) - added /SCALAR
 ;
 ; Contact     : dzarro@solar.stanford.edu
 ;-    
 
 
-function is_string,input_str,nonblank,err=err,blank=blank,count=count
+function is_string,input_str,nonblank,err=err,blank=blank,count=count,scalar=scalar
 
 count=0l
 err=''
 nonblank=''
 sz=size(input_str)
-dtype=sz[n_elements(sz)-2]
+dtype=sz[n_elements(sz)-2] & dsize=sz[n_elements(sz)-1]
 if dtype ne 7 then return,0b
+if keyword_set(scalar) && (dsize ne 1) then return,0b
 if keyword_set(blank) then return,1b
 
 b1=strtrim(string(1b),2)

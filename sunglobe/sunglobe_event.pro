@@ -87,6 +87,7 @@
 ;               Version 18, 24-Dec-2019, WTT, add Adjust Pointing option
 ;               Version 19, 21-Jan-2021, WTT, add Solar Orbiter option
 ;               Version 20, 17-Aug-2021, WTT, add FOV paint events
+;               Version 21, 24-Feb-2022, WTT, split EUI into EUV and Lya channels
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -475,11 +476,20 @@ jpeg_cleanup:
         sunglobe_parse_tmatrix, sstate
     end
 ;------------------------------------------------------------------------------
-;  Turn the EUI FOV on or off.
+;  Turn the EUI/HRI/EUV FOV on or off.
 ;------------------------------------------------------------------------------
-    'EUIFOV': begin
-        sstate.hideeui = 1 - sstate.hideeui
-        sstate.oeui->setproperty, hide=sstate.hideeui
+    'EUIEUVFOV': begin
+        sstate.hideeuieuv = 1 - sstate.hideeuieuv
+        sstate.oeuieuv->setproperty, hide=sstate.hideeuieuv
+        sstate.owindow->draw, sstate.oview
+        sunglobe_parse_tmatrix, sstate
+    end
+;------------------------------------------------------------------------------
+;  Turn the EUI/HRI/LYA FOV on or off.
+;------------------------------------------------------------------------------
+    'EUILYAFOV': begin
+        sstate.hideeuilya = 1 - sstate.hideeuilya
+        sstate.oeuilya->setproperty, hide=sstate.hideeuilya
         sstate.owindow->draw, sstate.oview
         sunglobe_parse_tmatrix, sstate
     end
@@ -542,12 +552,22 @@ jpeg_cleanup:
         sunglobe_parse_tmatrix, sstate
     end
 ;------------------------------------------------------------------------------
-;  Configure the EUI field-of-view
+;  Configure the EUI/HRI/EUV field-of-view
 ;------------------------------------------------------------------------------
-    'CONFIGEUI': begin
-        sunglobe_eui_config_fov, sstate.oeui, group_leader=event.top, /modal
-        sstate.hideeui = 0
-        sstate.oeui->setproperty, hide=sstate.hideeui
+    'CONFIGEUIEUV': begin
+        sunglobe_eui_euv_config_fov, sstate.oeuieuv, group_leader=event.top, /modal
+        sstate.hideeuieuv = 0
+        sstate.oeuieuv->setproperty, hide=sstate.hideeuieuv
+        sstate.owindow->draw, sstate.oview
+        sunglobe_parse_tmatrix, sstate
+    end
+;------------------------------------------------------------------------------
+;  Configure the EUI/HRI/LYA field-of-view
+;------------------------------------------------------------------------------
+    'CONFIGEUILYA': begin
+        sunglobe_eui_lya_config_fov, sstate.oeuilya, group_leader=event.top, /modal
+        sstate.hideeuilya = 0
+        sstate.oeuilya->setproperty, hide=sstate.hideeuilya
         sstate.owindow->draw, sstate.oview
         sunglobe_parse_tmatrix, sstate
     end
@@ -593,10 +613,18 @@ jpeg_cleanup:
        sunglobe_display, sstate
     end
 ;------------------------------------------------------------------------------
-;  Paint the EUI field-of-view
+;  Paint the EUI/HRI/EUV field-of-view
 ;------------------------------------------------------------------------------
-    'PAINTEUI': begin
-       sunglobe_paint_fov, sstate, /eui
+    'PAINTEUIEUV': begin
+       sunglobe_paint_fov, sstate, /euieuv
+       sunglobe_diff_rot, sstate, /fovpaint
+       sunglobe_display, sstate
+    end
+;------------------------------------------------------------------------------
+;  Paint the EUI/HRI/LYA field-of-view
+;------------------------------------------------------------------------------
+    'PAINTEUILYA': begin
+       sunglobe_paint_fov, sstate, /euilya
        sunglobe_diff_rot, sstate, /fovpaint
        sunglobe_display, sstate
     end

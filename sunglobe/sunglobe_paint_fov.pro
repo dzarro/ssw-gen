@@ -34,7 +34,8 @@
 ; Opt. Outputs: None
 ;
 ; Keywords    : SPICE   = If set, then paint the SPICE FOV
-;               EUI     = If set, then paint the EUI FOV
+;               EUIEUV  = If set, then paint the EUI/HRI/EUV FOV
+;               EUILYA  = If set, then paint the EUI/HRI/LYA FOV
 ;               PHI     = If set, then paint the PHI FOV
 ;
 ;               If no keywords are passed, then the generic FOV is painted.
@@ -43,12 +44,14 @@
 ;
 ; Restrictions: None
 ;
-; History     :	Version 1, William Thompson, 16-Aug-2021, GSFC
+; History     :	Version 1, 16-Aug-2021, William Thompson, GSFC
+;               Version 2, 10-Nov-2021, WTT, include nominal offsets to S/C
+;               Version 3, 24-Feb-2022, WTT, split EUI into EUV and Lya channels
 ;
 ; Contact     :	WTHOMPSON
 ;-
 ;
-pro sunglobe_paint_fov, sstate, spice=spice, eui=eui, phi=phi
+pro sunglobe_paint_fov, sstate, spice=spice, euieuv=euieuv, euilya=euilya, phi=phi
 ;
 ;  Set up error catching.
 ;
@@ -94,20 +97,41 @@ if keyword_set(spice) then begin
    sstate.ospice->getproperty, nsteps=nsteps
    sstate.ospice->getproperty, stepsize=stepsize
    xsize = (nsteps-1)*stepsize + slitwid
-   sstate.ospice->getproperty, midpos=xcen   
-   ycen = 0
+   sstate.ospice->getproperty, midpos=midpos
+   sstate.ospice->getproperty, xoffset=xoffset
+   sstate.ospice->getproperty, yoffset=yoffset
+   xcen = midpos + xoffset
+   ycen = yoffset
    ins_roll = 0
-end else if keyword_set(eui) then begin
-   sstate.oeui->getproperty, xsize=xsize
-   sstate.oeui->getproperty, ysize=ysize
-   sstate.oeui->getproperty, xcen=xcen
-   sstate.oeui->getproperty, ycen=ycen
+end else if keyword_set(euieuv) then begin
+   sstate.oeuieuv->getproperty, xsize=xsize
+   sstate.oeuieuv->getproperty, ysize=ysize
+   sstate.oeuieuv->getproperty, xcen=xcen
+   sstate.oeuieuv->getproperty, ycen=ycen
+   sstate.oeuieuv->getproperty, xoffset=xoffset
+   sstate.oeuieuv->getproperty, yoffset=yoffset
+   xcen = xcen + xoffset
+   ycen = ycen + yoffset
+   ins_roll = 0
+end else if keyword_set(euilya) then begin
+   sstate.oeuilya->getproperty, xsize=xsize
+   sstate.oeuilya->getproperty, ysize=ysize
+   sstate.oeuilya->getproperty, xcen=xcen
+   sstate.oeuilya->getproperty, ycen=ycen
+   sstate.oeuilya->getproperty, xoffset=xoffset
+   sstate.oeuilya->getproperty, yoffset=yoffset
+   xcen = xcen + xoffset
+   ycen = ycen + yoffset
    ins_roll = 0
 end else if keyword_set(phi) then begin
    sstate.ophi->getproperty, xsize=xsize
    sstate.ophi->getproperty, ysize=ysize
    sstate.ophi->getproperty, xcen=xcen
    sstate.ophi->getproperty, ycen=ycen
+   sstate.ophi->getproperty, xoffset=xoffset
+   sstate.ophi->getproperty, yoffset=yoffset
+   xcen = xcen + xoffset
+   ycen = ycen + yoffset
    ins_roll = 0
 end else begin
    sstate.ogen->getproperty, xsize=xsize

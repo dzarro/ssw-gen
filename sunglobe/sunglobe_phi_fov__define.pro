@@ -52,6 +52,7 @@
 ; History     :	Version 1, 20-Jan-2016, William Thompson, GSFC
 ;               Version 2, 05-Feb-2016, WTT, GetProperty bug fix
 ;               Version 3, 10-Apr-2019, WTT, fix pointer free bug
+;               Version 4, 10-Nov-2021, WTT, include nominal offsets to S/C
 ;
 ; Contact     :	WTHOMPSON
 ;-
@@ -80,7 +81,13 @@ self.xsize = 1008.0             ;Width in X
 self.ysize = 1008.0             ;Width in Y
 self.xcen = 0.0                 ;Center in X
 self.ycen = 0.0                 ;Center in Y
-
+;
+;  Get the offset from the boresight.
+;
+sunglobe_get_ins_offset, sstate, 'PHI', xoffset, yoffset
+self.xoffset = xoffset
+self.yoffset = yoffset
+;
 if n_elements(xsize) eq 1 then self.xsize = xsize
 if n_elements(ysize) eq 1 then self.ysize = ysize
 if n_elements(xcen) eq 1 then self.xcen = xcen
@@ -106,6 +113,7 @@ end
 ;------------------------------------------------------------------------------
 
 pro sunglobe_phi_fov::setproperty, sstate=sstate, xsize=xsize, ysize=ysize, $
+                                   xoffset=xoffset, yoffset=yoffset, $
                                    xcen=xcen, ycen=ycen, _extra=_extra
 ;
 self->idlgrmodel::setproperty, _extra=_extra
@@ -119,6 +127,8 @@ if n_elements(xsize) eq 1 then self.xsize = xsize
 if n_elements(ysize) eq 1 then self.ysize = ysize
 if n_elements(xcen) eq 1 then self.xcen = xcen
 if n_elements(ycen) eq 1 then self.ycen = ycen
+if n_elements(xoffset) eq 1 then self.xoffset = xoffset
+if n_elements(yoffset) eq 1 then self.yoffset = yoffset
 ;
 ;  Build the field-of-view graphics based on the input properties.
 ;
@@ -129,6 +139,7 @@ end
 ;------------------------------------------------------------------------------
 
 pro sunglobe_phi_fov::getproperty, sstate=sstate, xsize=xsize, ysize=ysize, $
+                                   xoffset=xoffset, yoffset=yoffset, $
                                    xcen=xcen, ycen=ycen, _ref_extra=_ref_extra
 ;
 self.obox->getproperty, _extra=_ref_extra
@@ -139,6 +150,8 @@ xsize = self.xsize
 ysize = self.ysize
 xcen = self.xcen
 ycen = self.ycen
+xoffset = self.xoffset
+yoffset = self.yoffset
 ;
 end
 
@@ -156,6 +169,8 @@ dist = eye - 1
 ;
 widget_control, (*self.psstate).wxsc, get_value=xsc
 widget_control, (*self.psstate).wysc, get_value=ysc
+xsc = xsc + self.xoffset
+ysc = ysc + self.yoffset
 dtor = !dpi / 180.d0
 asectorad = dtor / 3600.d0
 ;
@@ -187,5 +202,7 @@ struct = {sunglobe_phi_fov, $
           ysize: 1, $
           xcen: 0.0, $
           ycen: 0.0, $
+          xoffset: 0.0, $
+          yoffset: 0.0, $
           obox: obj_new()}
 end
