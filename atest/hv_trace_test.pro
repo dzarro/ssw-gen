@@ -24,7 +24,7 @@ for i=0,count-1 do begin
  if is_string(err) then return
  tobj->plot,/use
  index=tobj.index
- image=trace_scale(index,tobj.data,/byte)
+ image=t->scale(index,tobj.data,/byte)
 
  HV_TRACE2_PREP2JP2,index,image,hvs=hvs
 
