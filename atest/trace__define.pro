@@ -209,9 +209,31 @@ end
 
 function trace::mission_times
 
-tstart='16-Feb-1998 20:00:00.000'
+tstart='16-Feb-1998 00:00:00.000'
 tend='22-Jun-2010 00:00:00.000'
 return,anytim2tai([tstart,tend])
+end
+
+;--------------------------------------------------------------------------
+
+function trace::overlap,tstart,tend,dstart=dstart,dend=dend
+
+dstart=-1.d & dend=-1.d
+if ~valid_time(tstart) || ~valid_time(tend) then return,0b
+
+mtimes=self->mission_times()
+mstart=mtimes[0] & mend=mtimes[1]
+times=anytim2tai([tstart,tend])
+dstart=min(times) & dend=max(times)
+outside= ((dstart lt mstart) && (dend lt mstart)) || $
+         ((dstart gt mend) && (dend gt mend))
+
+if ~outside then begin
+ dstart =  dstart > mstart
+ dend = dend < mend
+endif
+
+return,~outside
 end
 
 ;--------------------------------------------------------------------------
@@ -283,6 +305,17 @@ if count eq 1 then times=times[0]
 return,times
 end
 
+;-----------------------------------------------------------------------
+;-- search local archive before remote archive
+
+function trace::cat_search,tstart,tend,_ref_extra=extra
+
+if self->have_level0() then files=self->cat(tstart,tend,_extra=extra) else $
+ files=self->level0(tstart,tend,_extra=extra)
+
+return,files
+end
+  
 ;------------------------------------------------------------------------
 ;-- search TRACE catalog
 
@@ -320,10 +353,17 @@ end
 
 function trace::level0_dir
   
-if file_test2('$TRACE_I1_DIR',/dir) then return,chklog('$TRACE_I1_DIR') else return,''
+if file_test2('$TRACE_I1_DIR',/dir) then return,local_name('$TRACE_I1_DIR') else return,''
 
 end
 
+;----------------------------------------------------------------------------
+function trace::have_level0,path
+
+path=self->level0_dir()
+return,is_string(path)
+end
+  
 ;------------------------------------------------------------------------
 ;-- validate input times
 
@@ -341,6 +381,14 @@ endif else begin
  endif
 endelse
 
+overlap=self->overlap(tstart,tend,dstart=dstart,dend=dend)
+if ~overlap then begin
+ err='Search times outside mission lifetime.'
+ mprint,err  
+endif else begin
+ tstart=anytim2utc(dstart,/ecs) & tend=anytim2utc(dend,/ecs)
+endelse  
+   
 return & end
 ;-------------------------------------------------------------------------
 ;-- find  Level 0 files
@@ -390,7 +438,7 @@ function trace::have_path,err=err,verbose=verbose
 verbose=keyword_set(verbose)
 if self.have_path.checked then begin
  err=self.have_path.err
- if verbose && is_string(err) then mprint,err  
+ if verbose then mprint,err  
  return,self.have_path.value
 endif
 
@@ -398,12 +446,13 @@ err=''
 if ~have_proc('read_trace') then begin
  epath=local_name('$SSW/trace/idl')
  if file_test(epath,/dir) then ssw_path,/trace,/quiet
- if ~have_proc('read_trace') then begin
-  err='TRACE branch of $SSW not installed. Cannot Read nor Prep Level 0 file.'
-  self.have_path.err=err
-  xack,err,/suppress
-  self.have_path.value=0b
- endif
+endif
+
+if ~have_proc('read_trace') then begin
+ err='TRACE branch of $SSW not installed. Cannot Read nor Prep Level 0 file.'
+ self.have_path.err=err
+ xack,err,/suppress
+ self.have_path.value=0b
 endif else begin
  self.have_path.err=''
  self.have_path.value=1b
@@ -483,6 +532,18 @@ for i=0,nfiles-1 do begin
   endif
  endif
 
+;-- just need index
+
+ if level eq 0 then begin
+  if is_number(data) then begin
+   read_trace,dfile,-1,index
+   if data eq -1 then break
+   index=-1
+   if (data gt -1) && (data lt n_elements(index)) then index=index[data]
+   break
+  endif
+ endif
+ 
 ;-- select image subset?
 
  records=self->read_records(dfile,count=n_img)
@@ -527,13 +588,14 @@ for i=0,nfiles-1 do begin
   sz=size(odata)
   if (sz[0] lt 2) then begin
    err='Image '+trim(img)+' is not 2D.'
+   print,sz  
    mprint,err
    continue
   endif
 
   if do_prep then do_prep=self->have_dbase(err=dbase_err,/verbose,/calibration)
   if do_prep then begin
-   mprint,'Prepping image '+trim(img)
+   mprint,'Prepping image '+trim(img)  
    trace_prep,oindex,odata,index,data,/norm,/wave2point,/float,_extra=extra,/quiet
    if ~is_struct(index) then begin
     err='Error prepping image '+trim(img)
@@ -563,6 +625,17 @@ endif
 self->binaries,/reset
 
 return & end
+
+;--------------------------------------------------------------------
+
+function trace::scale,index,data,outindex,_extra=extra
+
+if ~is_struct(index) || (size(data,/n_dim) ne 2) then return,-1
+if ~have_proc('trace_scale') then return,data
+if n_params() eq 2 then return,call_function('trace_scale',index,data,/byte,_extra=extra)
+if n_params() eq 3 then return,call_function('trace_scale',index,data,outindex,/byte,_extra=extra)
+return,data
+end
 
 ;--------------------------------------------------------------------
 
